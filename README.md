@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# HCI Furniture Store
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A premium, Scandinavian-minimalist furniture store frontend inspired by the Nordiq Framer template. Built with modern web technologies including React 19, Tailwind CSS v4, and Framer Motion for smooth, immersive user experiences.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+-   **Hero Section**: Engaging landing with subtle animations.
+-   **Product Collections**: Focus on curated living spaces (Living Room, Bedroom, Workspace).
+-   **Featured Products**: Highlighted items with interactive hover effects.
+-   **Testimonials**: Customer reviews slider functionality.
+-   **Newsletter**: Email subscription form component.
+-   **Infinite Marquee**: Seamless scrolling brand logos.
+-   **Responsive Design**: Fully responsive layout including mobile navigation.
+-   **3D Elements**: Integrated Three.js components for advanced visuals.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+-   **Framework**: [React](https://react.dev/) 19 + [Vite](https://vitejs.dev/)
+-   **Styling**: [Tailwind CSS](https://tailwindcss.com/) v4
+-   **Animation**: [Framer Motion](https://www.framer.com/motion/)
+-   **3D Graphics**: [React Three Fiber](https://docs.pmnd.rs/react-three-fiber/) / [Drei](https://github.com/pmndrs/drei)
+-   **Icons**: [Lucide React](https://lucide.dev/)
+-   **Linting**: ESLint + TypeScript ESLint
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1.  **Clone the repository**
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+2.  **Install dependencies**
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+    ```bash
+    npm install
+    ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+3.  **Run the development server**
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+    ```bash
+    npm run dev
+    ```
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+    Open [http://localhost:5173](http://localhost:5173) to view it in your browser.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Scripts
+
+-   `npm run dev`: Starts the development server.
+-   `npm run build`: Compiles the application for production.
+-   `npm run lint`: Runs ESLint to check for code quality issues.
+-   `npm run preview`: Previews the production build locally.
+
+## Design System
+
+The application uses a refined color palette aligned with Scandinavian design principles.
+
+| Token | Value | Purpose |
+| :--- | :--- | :--- |
+| **Cream** | `#F5F3EE` | Primary background color |
+| **Charcoal** | `#1A1A1A` | Primary text color |
+| **Stone** | `#D4CDC4` | Borders and subtle accents |
+| **Sage** | `#8DA399` | Secondary accent color |
+| **Serif** | *DM Serif Display* | Headings and titles |
+| **Sans** | *Inter* | Body text and UI elements |
