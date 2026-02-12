@@ -1,0 +1,22 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm install
+      - run: npm run lint      # Catch styling/code errors
+      - run: npx tsc           # Crucial: Check for TypeScript errors
+      - run: npm run build     # Ensure the project actually builds
