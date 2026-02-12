@@ -1,0 +1,113 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Menu, X, ShoppingBag, Search } from 'lucide-react';
+
+const navLinks = [
+  { name: 'Shop', href: '#shop' },
+  { name: 'Collections', href: '#collections' },
+  { name: 'About', href: '#about' },
+  { name: 'Journal', href: '#journal' },
+];
+
+export default function Navbar() {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <>
+      <motion.nav
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          isScrolled
+            ? 'bg-cream/80 backdrop-blur-xl shadow-[0_1px_0_rgba(0,0,0,0.05)]'
+            : 'bg-transparent'
+        }`}
+      >
+        <div className="mx-auto max-w-7xl px-6 lg:px-10">
+          <div className="flex items-center justify-between h-20">
+            {/* Logo */}
+            <a href="#top" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
+              NORDIQ
+            </a>
+
+            {/* Desktop Nav */}
+            <div className="hidden md:flex items-center gap-10">
+              {navLinks.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
+                >
+                  {link.name}
+                  <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
+                </a>
+              ))}
+            </div>
+
+            {/* Icons */}
+            <div className="flex items-center gap-5">
+              <button className="hidden md:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
+                <Search size={18} strokeWidth={1.5} />
+              </button>
+              <button className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
+                <ShoppingBag size={18} strokeWidth={1.5} />
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-sage text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+                  2
+                </span>
+              </button>
+              <button
+                className="md:hidden text-charcoal/70 hover:text-charcoal transition-colors"
+                onClick={() => setIsMobileOpen(true)}
+                aria-label="Menu"
+              >
+                <Menu size={22} strokeWidth={1.5} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.nav>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-cream flex flex-col"
+          >
+            <div className="flex items-center justify-between px-6 h-20">
+              <span className="text-2xl tracking-[0.3em] font-serif">NORDIQ</span>
+              <button onClick={() => setIsMobileOpen(false)} aria-label="Close menu">
+                <X size={24} strokeWidth={1.5} />
+              </button>
+            </div>
+            <div className="flex flex-col items-center justify-center flex-1 gap-8">
+              {navLinks.map((link, i) => (
+                <motion.a
+                  key={link.name}
+                  href={link.href}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="text-3xl font-serif text-charcoal"
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  {link.name}
+                </motion.a>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
