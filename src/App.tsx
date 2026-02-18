@@ -1,4 +1,5 @@
 import './App.css'
+import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import Marquee from './components/Marquee'
@@ -8,10 +9,12 @@ import Collections from './components/Collections'
 import Testimonials from './components/Testimonials'
 import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 
-function App() {
+function HomePage() {
   return (
-    <div className="min-h-screen">
+    <>
       <Navbar />
       <Hero />
       <Marquee />
@@ -21,6 +24,18 @@ function App() {
       <Testimonials />
       <Newsletter />
       <Footer />
+    </>
+  )
+}
+
+function App() {
+  return (
+    <div className="min-h-screen">
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+      </Routes>
     </div>
   )
 }

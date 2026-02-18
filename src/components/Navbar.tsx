@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ShoppingBag, Search } from 'lucide-react';
+import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { isLoggedIn, logout } from '../utils/auth';
 
 const navLinks = [
   { name: 'Shop', href: '#shop' },
@@ -12,6 +14,14 @@ const navLinks = [
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const loggedIn = isLoggedIn();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+    window.location.reload();
+  };
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -25,11 +35,10 @@ export default function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          isScrolled
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled
             ? 'bg-cream/80 backdrop-blur-xl shadow-[0_1px_0_rgba(0,0,0,0.05)]'
             : 'bg-transparent'
-        }`}
+          }`}
       >
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
           <div className="flex items-center justify-between h-20">
@@ -63,6 +72,25 @@ export default function Navbar() {
                   2
                 </span>
               </button>
+              {loggedIn ? (
+                <button
+                  onClick={handleLogout}
+                  className="text-charcoal/70 hover:text-charcoal transition-colors"
+                  aria-label="Logout"
+                  title="Sign out"
+                >
+                  <LogOut size={18} strokeWidth={1.5} />
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="text-charcoal/70 hover:text-charcoal transition-colors"
+                  aria-label="Login"
+                  title="Sign in"
+                >
+                  <User size={18} strokeWidth={1.5} />
+                </Link>
+              )}
               <button
                 className="md:hidden text-charcoal/70 hover:text-charcoal transition-colors"
                 onClick={() => setIsMobileOpen(true)}
