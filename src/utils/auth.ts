@@ -1,59 +1,3 @@
-/**
- * ============================================================================
- * AUTHENTICATION UTILITY MODULE — auth.ts
- * ============================================================================
- *
- * This module handles the complete authentication flow for the furniture store:
- *
- *   REGISTRATION FLOW:
- *   1. User fills out the register form (name, email, password).
- *   2. register() checks if email already exists in localStorage users list.
- *   3. If unique, the new user is appended to the stored users array.
- *   4. The RegisterPage shows an animated success message, then redirects
- *      to /login after 2 seconds.
- *
- *   LOGIN FLOW:
- *   1. User enters email & password on the login form.
- *   2. login() first checks against the built-in demo credentials.
- *   3. If no match, it checks against all registered users in localStorage.
- *   4. On success: a session object is saved to localStorage and the
- *      LoginPage shows an animated success message, then redirects to /.
- *   5. On failure: an animated error message is shown in the UI.
- *
- *   SESSION MANAGEMENT:
- *   - isLoggedIn() checks if a session exists in localStorage.
- *   - getUser() retrieves the current session data (email, name).
- *   - logout() removes the session from localStorage.
- *   - ProtectedRoute component redirects unauthenticated users to /login.
- *   - Session persists across page refreshes (localStorage is persistent).
- *
- * ============================================================================
- *
- *   HOW TO TEST:
- *
- *   1. REGISTRATION:
- *      - Navigate to /register
- *      - Fill in name, email, password, confirm password
- *      - Submit → green success message fades in, then redirect to /login
- *      - Check localStorage key "furniture_store_users" to confirm storage
- *
- *   2. LOGIN:
- *      - Navigate to /login
- *      - Enter the email/password you just registered (or demo: admin@gmail.com / 1234)
- *      - Submit → green success message fades in, then redirect to /
- *      - Try wrong credentials → red error message fades in
- *
- *   3. SESSION PERSISTENCE:
- *      - After logging in, refresh the page → you should stay on /
- *      - Check localStorage key "furniture_store_auth" to see session data
- *
- *   4. ROUTE PROTECTION:
- *      - Log out (click logout icon in Navbar)
- *      - Try navigating to / → you should be redirected to /login
- *      - Log back in → you can access / again
- *
- * ============================================================================
- */
 
 // localStorage key for the current session (stores logged-in user info)
 const AUTH_KEY = "furniture_store_auth";
@@ -87,7 +31,8 @@ export function login(email: string, password: string): boolean {
         email === DEMO_CREDENTIALS.email &&
         password === DEMO_CREDENTIALS.password
     ) {
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ email, loggedInAt: Date.now() }));
+        // Store session with name "Admin" for the demo account (used for greeting display)
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ email, name: "Admin", loggedInAt: Date.now() }));
         return true;
     }
 

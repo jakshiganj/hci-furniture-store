@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { isLoggedIn, logout } from '../utils/auth';
+import { isLoggedIn, logout, getUser } from '../utils/auth';
 
 const navLinks = [
   { name: 'Shop', href: '#shop' },
@@ -15,6 +15,8 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const loggedIn = isLoggedIn();
+  // Retrieve the current user's data (name, email) from localStorage session
+  const user = getUser();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -36,8 +38,8 @@ export default function Navbar() {
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled
-            ? 'bg-cream/80 backdrop-blur-xl shadow-[0_1px_0_rgba(0,0,0,0.05)]'
-            : 'bg-transparent'
+          ? 'bg-cream/80 backdrop-blur-xl shadow-[0_1px_0_rgba(0,0,0,0.05)]'
+          : 'bg-transparent'
           }`}
       >
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
@@ -73,14 +75,22 @@ export default function Navbar() {
                 </span>
               </button>
               {loggedIn ? (
-                <button
-                  onClick={handleLogout}
-                  className="text-charcoal/70 hover:text-charcoal transition-colors"
-                  aria-label="Logout"
-                  title="Sign out"
-                >
-                  <LogOut size={18} strokeWidth={1.5} />
-                </button>
+                <>
+                  {/* Greeting — shows logged-in user's name from localStorage session */}
+                  {user?.name && (
+                    <span className="hidden md:inline text-[12px] tracking-[0.1em] text-charcoal/60 font-medium">
+                      Hello, {user.name} 👋
+                    </span>
+                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="text-charcoal/70 hover:text-charcoal transition-colors"
+                    aria-label="Logout"
+                    title="Sign out"
+                  >
+                    <LogOut size={18} strokeWidth={1.5} />
+                  </button>
+                </>
               ) : (
                 <Link
                   to="/login"
