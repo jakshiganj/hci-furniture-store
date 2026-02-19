@@ -13,10 +13,13 @@ export default function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    // Track successful registration to show animated success message
+    const [success, setSuccess] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
 
         if (password.length < 4) {
             setError('Password must be at least 4 characters.');
@@ -33,11 +36,15 @@ export default function RegisterPage() {
         setTimeout(() => {
             const result = register(name, email, password);
             if (result.success) {
-                navigate('/login');
+                // Show animated success message instead of alert()
+                setSuccess(result.message);
+                setIsLoading(false);
+                // Redirect to login page after 2 seconds
+                setTimeout(() => navigate('/login'), 2000);
             } else {
                 setError(result.message);
+                setIsLoading(false);
             }
-            setIsLoading(false);
         }, 600);
     };
 
@@ -95,6 +102,17 @@ export default function RegisterPage() {
                     <p className="text-[12px] tracking-[0.2em] uppercase text-charcoal/40 mb-10">
                         Create your account
                     </p>
+
+                    {/* Animated Success Message — shown after successful registration */}
+                    {success && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-600 text-[13px] rounded"
+                        >
+                            {success}
+                        </motion.div>
+                    )}
 
                     {/* Error */}
                     {error && (

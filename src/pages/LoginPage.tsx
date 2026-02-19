@@ -11,20 +11,26 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    // Track successful login to show animated success message before redirect
+    const [success, setSuccess] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
         setIsLoading(true);
 
         setTimeout(() => {
-            const success = login(email, password);
-            if (success) {
-                navigate('/');
+            const result = login(email, password);
+            if (result) {
+                // Show animated success message, then redirect after 1.5 seconds
+                setSuccess('Login successful! Redirecting...');
+                setIsLoading(false);
+                setTimeout(() => navigate('/'), 1500);
             } else {
                 setError('Invalid email or password. Please try again.');
+                setIsLoading(false);
             }
-            setIsLoading(false);
         }, 600);
     };
 
@@ -82,6 +88,17 @@ export default function LoginPage() {
                     <p className="text-[12px] tracking-[0.2em] uppercase text-charcoal/40 mb-10">
                         Sign in to your account
                     </p>
+
+                    {/* Animated Success Message — shown after successful login */}
+                    {success && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-600 text-[13px] rounded"
+                        >
+                            {success}
+                        </motion.div>
+                    )}
 
                     {/* Error */}
                     {error && (
@@ -149,11 +166,7 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    {/* Demo Credentials */}
-                    <div className="mt-8 px-4 py-3 bg-stone-light border border-stone text-[12px] text-charcoal/50 rounded">
-                        <span className="font-medium text-charcoal/70">Demo:</span>{' '}
-                        admin@gmail.com / 1234
-                    </div>
+
 
                     {/* Register Link */}
                     <p className="mt-8 text-center text-[13px] text-charcoal/50">

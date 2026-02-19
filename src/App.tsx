@@ -11,6 +11,7 @@ import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+// ProtectedRoute is available at './components/ProtectedRoute' for future dashboard/designer routes
 
 function HomePage() {
   return (
@@ -32,6 +33,7 @@ function App() {
   return (
     <div className="min-h-screen">
       <Routes>
+        {/* Public: accessible without login */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -41,3 +43,4 @@ function App() {
 }
 
 export default App
+
