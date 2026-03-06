@@ -10,7 +10,7 @@ const testimonials = [
         rating: 5,
     },
     {
-        quote: "I've furnished my entire home with NORDIQ pieces. Three years later, every item still looks and feels brand new.",
+        quote: "I've furnished my entire home with CeylonVista pieces. Three years later, every item still looks and feels brand new.",
         author: 'Marcus Weber',
         location: 'Copenhagen, Denmark',
         rating: 5,

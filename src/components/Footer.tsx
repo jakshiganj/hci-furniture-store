@@ -14,7 +14,7 @@ export default function Footer() {
                     {/* Brand */}
                     <div className="lg:col-span-2">
                         <h3 className="text-2xl tracking-[0.3em] font-serif text-white mb-4">
-                            NORDIQ
+                            CeylonVista
                         </h3>
                         <p className="text-sm leading-relaxed max-w-xs mb-6">
                             Timeless Scandinavian furniture, designed with care and crafted to
@@ -63,7 +63,7 @@ export default function Footer() {
                 {/* Bottom */}
                 <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-[12px] text-white/30">
-                        © 2026 NORDIQ. All rights reserved.
+                        © 2026 CeylonVista. All rights reserved.
                     </p>
                     <div className="flex items-center gap-6 text-[12px] text-white/30">
                         <a href="#" className="hover:text-white/60 transition-colors">Privacy</a>

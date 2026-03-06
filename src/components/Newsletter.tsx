@@ -26,7 +26,7 @@ export default function Newsletter() {
                     Stay Connected
                 </p>
                 <h2 className="font-serif text-3xl md:text-4xl text-charcoal mb-4">
-                    Join the <span className="italic">NORDIQ</span> World
+                    Join the <span className="italic">CeylonVista</span> World
                 </h2>
                 <p className="text-charcoal/50 text-sm leading-relaxed mb-10 max-w-md mx-auto">
                     Be the first to discover new collections, design insights, and

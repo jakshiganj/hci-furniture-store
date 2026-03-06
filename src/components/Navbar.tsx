@@ -46,7 +46,7 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
             <a href="#top" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
-              NORDIQ
+              CeylonVista
             </a>
 
             {/* Desktop Nav */}
@@ -123,7 +123,7 @@ export default function Navbar() {
             className="fixed inset-0 z-[60] bg-cream flex flex-col"
           >
             <div className="flex items-center justify-between px-6 h-20">
-              <span className="text-2xl tracking-[0.3em] font-serif">NORDIQ</span>
+              <span className="text-2xl tracking-[0.3em] font-serif">CeylonVista</span>
               <button onClick={() => setIsMobileOpen(false)} aria-label="Close menu">
                 <X size={24} strokeWidth={1.5} />
               </button>

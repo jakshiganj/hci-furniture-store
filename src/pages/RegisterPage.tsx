@@ -104,7 +104,7 @@ export default function RegisterPage() {
 
                         {/* Brand */}
                         <Link to="/" className="block text-2xl tracking-[0.3em] font-serif text-charcoal mb-2">
-                            NORDIQ
+                            CeylonVista
                         </Link>
                         <p className="text-[12px] tracking-[0.2em] uppercase text-charcoal/40 mb-10">
                             Create your account
