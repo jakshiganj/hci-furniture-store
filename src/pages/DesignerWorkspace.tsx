@@ -1,15 +1,4 @@
-/**
- * DesignerWorkspace Page
- *
- * Placeholder page for the furniture designer workspace.
- * This page will later integrate:
- *   - 2D Canvas editor (Member 3)
- *   - Three.js 3D renderer (Member 2)
- *   - Save/load persistence system (Member 4)
- *
- * For now it reads the selected roomType from localStorage
- * and displays placeholder panels for each future module.
- */
+
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +8,7 @@ export default function DesignerWorkspace() {
     const navigate = useNavigate();
 
     // Lazy initialization: read roomType from localStorage once (avoids setState in useEffect)
-    const [roomType, setRoomType] = useState<string>(() => {
+    const [roomType] = useState<string>(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem('roomType') || '';
         }
