@@ -6,6 +6,7 @@ import Marquee from './components/Marquee'
 import Features from './components/Features'
 import ProductGrid from './components/ProductGrid'
 import Collections from './components/Collections'
+import CreateDesign from './components/CreateDesign'
 import Testimonials from './components/Testimonials'
 import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
@@ -20,6 +21,7 @@ function HomePage() {
       <Hero />
       <Marquee />
       <Features />
+      <CreateDesign />
       <ProductGrid />
       <Collections />
       <Testimonials />
