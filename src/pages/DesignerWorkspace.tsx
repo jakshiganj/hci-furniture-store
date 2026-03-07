@@ -6,8 +6,6 @@ import { ArrowLeft, PenTool, Box, SlidersHorizontal } from 'lucide-react';
 
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
-
-    // Lazy initialization: read roomType from localStorage once (avoids setState in useEffect)
     const [roomType] = useState<string>(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem('roomType') || '';
