@@ -1,5 +1,6 @@
 import { motion, useInView } from 'framer-motion';
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sofa, UtensilsCrossed, Bed } from 'lucide-react';
 
 const roomOptions = [
@@ -72,10 +73,14 @@ export default function CreateDesign() {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-100px' });
     const [roomType, setRoomType] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     const handleSelect = (type: string) => {
         setRoomType(type);
+        // Persist selection and navigate to designer workspace
+        localStorage.setItem('roomType', type);
         console.log(`${type} selected`);
+        navigate('/designer');
     };
 
     return (

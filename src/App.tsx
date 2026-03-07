@@ -12,6 +12,7 @@ import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import DesignerWorkspace from './pages/DesignerWorkspace'
 // ProtectedRoute is available at './components/ProtectedRoute' for future dashboard/designer routes
 
 function HomePage() {
@@ -39,6 +40,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/designer" element={<DesignerWorkspace />} />
       </Routes>
     </div>
   )
