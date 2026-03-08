@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
 import { 
@@ -12,7 +12,7 @@ import {
   Box as BoxShape,
   Cylinder as CylinderShape
 } from '@react-three/drei';
-import { ArrowLeft, Box as BoxIcon, Move, RotateCw, Trash2, LayoutTemplate, Save, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Box as BoxIcon, Move, RotateCw, Trash2, LayoutTemplate, Save, Check, AlertCircle, Plus, X, ChevronDown, Home } from 'lucide-react';
 import * as THREE from 'three';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
@@ -244,7 +244,9 @@ function Model({
           // @ts-expect-error type incompatibility in newer drei versions
           object={groupRef} 
           mode={transformMode}
-          showY={false}
+          showX={transformMode === 'translate'}
+          showY={transformMode === 'rotate'}
+          showZ={transformMode === 'translate'}
         />
       )}
     </>
@@ -289,9 +291,69 @@ function RoomGeometry({ room, onDeselect }: { room: RoomType; onDeselect: () => 
   );
 }
 
+// --- Custom Room Dropdown ---
+function RoomDropdown({ value, onChange, rooms }: { value: string; onChange: (v: string) => void; rooms: RoomType[] }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    const activeRoom = rooms.find(r => r.id === value) || rooms[0];
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm border transition-all cursor-pointer
+                    ${isOpen ? 'border-sage shadow-sm bg-white' : 'border-stone-light bg-warm-white hover:border-charcoal/30'}`}
+            >
+                <Home size={14} className="text-charcoal/50" />
+                <span className="text-charcoal">{activeRoom.name}</span>
+                <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <ChevronDown size={13} className="text-charcoal/40" />
+                </motion.span>
+            </button>
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute left-0 top-full mt-2 w-56 bg-white/95 backdrop-blur-xl border border-stone-light shadow-xl z-50 overflow-hidden rounded-lg"
+                    >
+                        {rooms.map(r => (
+                            <button
+                                key={r.id}
+                                onClick={() => { onChange(r.id); setIsOpen(false); }}
+                                className={`w-full text-left px-4 py-3 text-[13px] flex items-center gap-3 transition-all duration-200
+                                    ${value === r.id
+                                        ? 'bg-cream text-charcoal font-medium'
+                                        : 'text-charcoal/60 hover:bg-stone-light/30 hover:text-charcoal'
+                                    }`}
+                            >
+                                <div className="w-4 h-4 rounded-sm shadow-inner" style={{ backgroundColor: r.floorColor }} />
+                                {r.name}
+                                {value === r.id && <Check size={13} className="ml-auto text-sage" strokeWidth={2.5} />}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
 // --- Main Workspace Component ---
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const designIdFromUrl = searchParams.get('designId');
     
     // State
     const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
@@ -302,6 +364,13 @@ export default function DesignerWorkspace() {
     const [selectedRoomId, setSelectedRoomId] = useState<string>(ROOMS[0].id);
     const [isSaving, setIsSaving] = useState(false);
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+    // Design identity
+    const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
+    const [designName, setDesignName] = useState('');
+    const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
+    const [newDesignName, setNewDesignName] = useState('');
+    const [isEditingName, setIsEditingName] = useState(false);
 
     const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
@@ -316,21 +385,33 @@ export default function DesignerWorkspace() {
             const user = getUser();
             if (!user?.id) return;
             
-            const { data, error } = await supabase
+            let query = supabase
                 .from('saved_designs')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(1);
+                .select('*');
+
+            if (designIdFromUrl) {
+                // Load a specific design by ID
+                query = query.eq('id', designIdFromUrl);
+            } else {
+                // Fall back to most recent design by this user
+                query = query
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+            }
                 
+            const { data, error } = await query;
+
             if (data && data.length > 0 && !error) {
                 const design = data[0];
+                setCurrentDesignId(design.id);
+                setDesignName(design.name || 'Untitled Room');
                 setSelectedRoomId(design.room_type);
                 setPlacedItems(design.furniture_layout || []);
             }
         };
         loadDesigns();
-    }, []);
+    }, [designIdFromUrl]);
 
     // Handlers
     const addItem = (catalogItem: typeof CATALOG[0]) => {
@@ -359,29 +440,64 @@ export default function DesignerWorkspace() {
         }
     };
 
+    // --- Create New Design ---
+    const handleCreateNew = () => {
+        setNewDesignName('');
+        setIsNewDesignModalOpen(true);
+    };
+
+    const confirmCreateNew = () => {
+        const name = newDesignName.trim() || `Room Design - ${new Date().toLocaleDateString()}`;
+        setCurrentDesignId(null);
+        setDesignName(name);
+        setPlacedItems([]);
+        setSelectedId(null);
+        setSelectedRoomId(ROOMS[0].id);
+        setIsNewDesignModalOpen(false);
+        setSearchParams({});
+        showToastMessage(`New design "${name}" created`);
+    };
+
+    // --- Save (Insert or Update) ---
     const handleSave = async () => {
         const user = getUser();
         if (!user?.id) {
-            showToastMessage('Please sign in to save your 3D designs to the cloud computing systems.', 'error');
+            showToastMessage('Please sign in to save your designs.', 'error');
             return;
         }
 
         setIsSaving(true);
         try {
-            // We insert a new version into the history ledger
-            const { error } = await supabase.from('saved_designs').insert({
+            const payload = {
                 user_id: user.id,
-                name: `Room Design Snapshot - ${new Date().toLocaleDateString()}`,
+                name: designName || 'Untitled Room',
                 room_type: selectedRoomId,
                 furniture_layout: placedItems
-            });
+            };
 
-            if (error) throw error;
-            
-            showToastMessage('Design saved successfully');
+            if (currentDesignId) {
+                // Update existing design
+                const { error } = await supabase
+                    .from('saved_designs')
+                    .update(payload)
+                    .eq('id', currentDesignId);
+                if (error) throw error;
+                showToastMessage('Design saved');
+            } else {
+                // Insert new design
+                const { data, error } = await supabase
+                    .from('saved_designs')
+                    .insert(payload)
+                    .select()
+                    .single();
+                if (error) throw error;
+                setCurrentDesignId(data.id);
+                setSearchParams({ designId: data.id });
+                showToastMessage('New design saved');
+            }
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : "An unknown error occurred";
-            console.error('Error saving to cloud:', error);
+            console.error('Error saving design:', error);
             showToastMessage(`Failed to save: ${message}`, 'error');
         } finally {
             setIsSaving(false);
@@ -392,15 +508,42 @@ export default function DesignerWorkspace() {
         <div className="min-h-screen bg-cream flex flex-col h-screen overflow-hidden">
             {/* Top Bar */}
             <header className="border-b border-stone-light bg-warm-white flex-shrink-0">
-                <div className="mx-auto px-6 py-4 flex items-center justify-between">
-                    <button
-                        type="button"
-                        onClick={() => navigate('/')}
-                        className="inline-flex items-center gap-2 text-sm text-charcoal/60 hover:text-charcoal transition-colors duration-300 cursor-pointer"
-                    >
-                        <ArrowLeft size={16} strokeWidth={1.5} />
-                        Back to Home
-                    </button>
+                <div className="mx-auto px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                        <button
+                            type="button"
+                            onClick={() => navigate('/')}
+                            className="inline-flex items-center gap-2 text-sm text-charcoal/60 hover:text-charcoal transition-colors duration-300 cursor-pointer"
+                        >
+                            <ArrowLeft size={16} strokeWidth={1.5} />
+                            Back
+                        </button>
+                        {/* Design Name (editable inline) */}
+                        <div className="border-l border-stone-light pl-5">
+                            {isEditingName ? (
+                                <input
+                                    autoFocus
+                                    value={designName}
+                                    onChange={(e) => setDesignName(e.target.value)}
+                                    onBlur={() => setIsEditingName(false)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setIsEditingName(false); }}
+                                    className="font-serif text-lg text-charcoal bg-transparent border-b-2 border-sage outline-none py-0.5 px-1 -ml-1 min-w-[180px]"
+                                />
+                            ) : (
+                                <button
+                                    onClick={() => setIsEditingName(true)}
+                                    className="font-serif text-lg text-charcoal hover:text-sage-dark transition-colors cursor-text flex items-center gap-2 group"
+                                    title="Click to rename"
+                                >
+                                    {designName || 'Untitled Room'}
+                                    <span className="text-[10px] text-charcoal/30 group-hover:text-sage uppercase tracking-wider">edit</span>
+                                </button>
+                            )}
+                            <p className="text-[10px] text-charcoal/40 uppercase tracking-wider mt-0.5">
+                                {currentDesignId ? 'Saved' : 'Unsaved draft'}
+                            </p>
+                        </div>
+                    </div>
 
                     <div className="flex items-center gap-6">
                         <div className="flex items-center bg-stone-light/40 p-1 rounded-md">
@@ -421,16 +564,8 @@ export default function DesignerWorkspace() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <select
-                            value={selectedRoomId}
-                            onChange={(e) => setSelectedRoomId(e.target.value)}
-                            className="px-3 py-1.5 rounded-md text-sm border border-stone-light bg-warm-white text-charcoal outline-none focus:border-sage transition-colors cursor-pointer"
-                        >
-                            {ROOMS.map(r => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                        </select>
+                    <div className="flex items-center gap-3">
+                        <RoomDropdown value={selectedRoomId} onChange={setSelectedRoomId} rooms={ROOMS} />
                         <button
                             onClick={deleteSelected}
                             disabled={!selectedId}
@@ -441,17 +576,78 @@ export default function DesignerWorkspace() {
                             Remove
                         </button>
                         <button
+                            onClick={handleCreateNew}
+                            className="px-4 py-2 rounded-md border border-stone-light text-sm font-medium text-charcoal/70 hover:text-charcoal hover:border-charcoal/30 transition-colors flex items-center gap-2"
+                            title="Start fresh"
+                        >
+                            <Plus size={16} />
+                            New
+                        </button>
+                        <button
                             onClick={handleSave}
                             disabled={isSaving}
                             className="px-4 py-2 rounded-md bg-sage text-white text-sm font-medium hover:bg-sage-dark transition-colors flex items-center gap-2 disabled:opacity-70 shadow-sm"
                             title="Save to Database"
                         >
                             <Save size={16} />
-                            {isSaving ? 'Saving...' : 'Save Design'}
+                            {isSaving ? 'Saving...' : 'Save'}
                         </button>
                     </div>
                 </div>
             </header>
+
+            {/* New Design Modal */}
+            <AnimatePresence>
+                {isNewDesignModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            className="bg-white w-full max-w-md p-8 shadow-2xl relative"
+                        >
+                            <button
+                                onClick={() => setIsNewDesignModalOpen(false)}
+                                className="absolute top-6 right-6 text-charcoal/50 hover:text-charcoal transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <h3 className="text-2xl font-serif text-charcoal mb-2">New Design</h3>
+                            <p className="text-[13px] text-charcoal/50 mb-6">Give your room design a name to get started.</p>
+
+                            <form onSubmit={(e) => { e.preventDefault(); confirmCreateNew(); }}>
+                                <label className="block text-[11px] uppercase tracking-wider text-charcoal/60 mb-2">Design Name</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={newDesignName}
+                                    onChange={(e) => setNewDesignName(e.target.value)}
+                                    placeholder="e.g. My Living Room"
+                                    className="w-full border border-stone-light bg-warm-white px-4 py-3 text-sm focus:outline-none focus:border-sage transition-colors mb-6"
+                                />
+
+                                <div className="flex justify-end gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsNewDesignModalOpen(false)}
+                                        className="px-6 py-3 text-[12px] uppercase tracking-wider text-charcoal/70 hover:text-charcoal"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="bg-charcoal text-white px-8 py-3 text-[12px] uppercase tracking-wider hover:bg-charcoal/90 transition-colors"
+                                    >
+                                        Create Design
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Main Area */}
             <main className="flex-1 flex overflow-hidden">

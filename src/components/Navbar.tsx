@@ -6,7 +6,7 @@ import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
 
 const navLinks = [
-  { name: 'Shop', href: '/#shop' },
+  { name: 'Shop', href: '/products' },
   { name: 'Collections', href: '/#collections' },
   { name: 'About', href: '/#about' },
   { name: 'Journal', href: '/journal' },

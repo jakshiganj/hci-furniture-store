@@ -92,13 +92,13 @@ export default function ProductGrid() {
                             Curated <span className="italic">Collection</span>
                         </h2>
                     </div>
-                    <a
-                        href="#shop"
+                    <Link
+                        to="/products"
                         className="mt-6 md:mt-0 inline-flex items-center gap-2 text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors group"
                     >
                         View All
                         <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
-                    </a>
+                    </Link>
                 </motion.div>
 
                 {/* Grid */}

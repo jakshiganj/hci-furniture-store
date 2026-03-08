@@ -1,10 +1,88 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { Plus, X, Check, AlertCircle } from 'lucide-react';
+import { Plus, X, Check, AlertCircle, ChevronDown, Clock, Loader2, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Product, Order, SavedDesign } from '../types';
+
+// Status visual configuration
+const orderStatusOptions: { value: Order['status']; label: string; color: string; bg: string; icon: React.ReactNode }[] = [
+    { value: 'pending',    label: 'Pending',    color: 'text-amber-800',  bg: 'bg-amber-100/70', icon: <Clock size={12} /> },
+    { value: 'processing', label: 'Processing', color: 'text-blue-800',   bg: 'bg-blue-100/70',  icon: <Loader2 size={12} className="animate-spin" /> },
+    { value: 'shipped',    label: 'Shipped',    color: 'text-indigo-800', bg: 'bg-indigo-100/70', icon: <Truck size={12} /> },
+    { value: 'delivered',  label: 'Delivered',  color: 'text-green-800',  bg: 'bg-green-100/70', icon: <CheckCircle2 size={12} /> },
+    { value: 'cancelled',  label: 'Cancelled',  color: 'text-red-800',    bg: 'bg-red-100/70',   icon: <XCircle size={12} /> },
+];
+
+// --- CUSTOM STATUS DROPDOWN ---
+function StatusDropdown({ value, onChange }: { value: Order['status']; onChange: (v: Order['status']) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const active = orderStatusOptions.find(o => o.value === value) || orderStatusOptions[0];
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div ref={dropdownRef} className="relative inline-block">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`flex items-center gap-2 pr-7 pl-3 py-1.5 text-[11px] font-medium uppercase tracking-wider rounded-full border transition-all cursor-pointer
+                    ${isOpen ? 'border-sage shadow-sm' : 'border-transparent hover:border-charcoal/20'}
+                    ${active.bg} ${active.color}`}
+            >
+                {active.icon}
+                {active.label}
+                <motion.span
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                >
+                    <ChevronDown size={11} />
+                </motion.span>
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute left-0 top-full mt-2 w-48 bg-white/95 backdrop-blur-xl border border-stone-light shadow-xl z-50 overflow-hidden rounded-lg"
+                    >
+                        {orderStatusOptions.map((option) => (
+                            <button
+                                key={option.value}
+                                onClick={() => { onChange(option.value); setIsOpen(false); }}
+                                className={`w-full text-left px-4 py-2.5 text-[12px] flex items-center gap-2.5 transition-all duration-200
+                                    ${value === option.value
+                                        ? `${option.bg} ${option.color} font-medium`
+                                        : 'text-charcoal/60 hover:bg-stone-light/30 hover:text-charcoal'
+                                    }`}
+                            >
+                                <span className={value === option.value ? '' : 'opacity-50'}>{option.icon}</span>
+                                {option.label}
+                                {value === option.value && (
+                                    <Check size={12} className="ml-auto" strokeWidth={2.5} />
+                                )}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
 
 // --- PRODUCTS TAB ---
 function ProductsTab() {
@@ -267,31 +345,10 @@ function OrdersTab() {
                                     </td>
                                     <td className="py-4 px-4 font-medium">${o.total_amount.toLocaleString()}</td>
                                     <td className="py-4 px-4">
-                                        <div className="relative inline-block">
-                                            <select 
-                                                value={o.status || 'pending'} 
-                                                onChange={(e) => updateOrderStatus(o.id, e.target.value as Order['status'])}
-                                                className={`appearance-none outline-none cursor-pointer pr-8 pl-3 py-1.5 text-[11px] font-medium uppercase tracking-wider rounded-full border border-transparent transition-all hover:border-charcoal/20 focus:border-sage focus:ring-1 focus:ring-sage focus:ring-opacity-50
-                                                    ${o.status === 'pending' ? 'bg-amber-100/70 text-amber-800' : 
-                                                      o.status === 'processing' ? 'bg-blue-100/70 text-blue-800' :
-                                                      o.status === 'shipped' ? 'bg-indigo-100/70 text-indigo-800' :
-                                                      o.status === 'delivered' ? 'bg-green-100/70 text-green-800' :
-                                                      o.status === 'cancelled' ? 'bg-red-100/70 text-red-800' :
-                                                      'bg-stone-100 text-charcoal'
-                                                    }`}
-                                            >
-                                                <option value="pending">Pending</option>
-                                                <option value="processing">Processing</option>
-                                                <option value="shipped">Shipped</option>
-                                                <option value="delivered">Delivered</option>
-                                                <option value="cancelled">Cancelled</option>
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                                                <svg className={`h-3 w-3 ${o.status === 'pending' ? 'text-amber-800' : o.status === 'processing' ? 'text-blue-800' : o.status === 'shipped' ? 'text-indigo-800' : o.status === 'delivered' ? 'text-green-800' : o.status === 'cancelled' ? 'text-red-800' : 'text-charcoal'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                            </div>
-                                        </div>
+                                        <StatusDropdown
+                                            value={o.status || 'pending'}
+                                            onChange={(newStatus) => updateOrderStatus(o.id, newStatus)}
+                                        />
                                     </td>
                                 </tr>
                             ))}
@@ -345,6 +402,12 @@ function DesignsTab() {
                             
                             <div className="pt-4 border-t border-stone-light flex justify-between items-center">
                                 <span className="text-[11px] font-mono text-charcoal/40 bg-stone-light px-2 py-1">ID: ...{d.id.slice(-6)}</span>
+                                <Link
+                                    to={`/designer?designId=${d.id}`}
+                                    className="text-[12px] tracking-[0.1em] uppercase text-sage hover:text-sage-dark font-medium transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                    Load in Designer →
+                                </Link>
                             </div>
                         </div>
                     ))}
