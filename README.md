@@ -1,6 +1,6 @@
 # HCI Furniture Store
 
-A premium, Scandinavian-minimalist furniture store frontend inspired by the Nordiq Framer template. Built with modern web technologies including React 19, Tailwind CSS v4, and Framer Motion for smooth, immersive user experiences.
+A premium, Srilankan-minimalist furniture store frontend inspired by the Nordiq Framer template. Built with modern web technologies including React 19, Tailwind CSS v4, and Framer Motion for smooth, immersive user experiences.
 
 ## Features
 
@@ -49,7 +49,7 @@ A premium, Scandinavian-minimalist furniture store frontend inspired by the Nord
 
 ## Design System
 
-The application uses a refined color palette aligned with Scandinavian design principles.
+The application uses a refined color palette aligned with Srilankan design principles.
 
 | Token | Value | Purpose |
 | :--- | :--- | :--- |

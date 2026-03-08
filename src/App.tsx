@@ -16,6 +16,7 @@ import RegisterPage from './pages/RegisterPage'
 import DesignerWorkspace from './pages/DesignerWorkspace'
 import ProductPage from './pages/ProductPage'
 import CheckoutPage from './pages/CheckoutPage'
+import PastOrders from './pages/PastOrders'
 import JournalPage from './pages/JournalPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
@@ -49,6 +50,13 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/journal" element={<JournalPage />} />
+        
+        {/* Protected Customer Routes */}
+        <Route path="/orders" element={
+          <ProtectedRoute>
+            <PastOrders />
+          </ProtectedRoute>
+        } />
         
         {/* Protected Admin Routes */}
         <Route path="/designer" element={

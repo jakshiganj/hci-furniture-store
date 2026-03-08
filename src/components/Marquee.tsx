@@ -4,7 +4,7 @@ import { useRef } from 'react';
 export default function Marquee() {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-50px' });
-    const items = ['Handcrafted', '·', 'Sustainable', '·', 'Scandinavian', '·', 'Timeless', '·', 'Premium', '·'];
+    const items = ['Handcrafted', '·', 'Sustainable', '·', 'Srilankan', '·', 'Timeless', '·', 'Premium', '·'];
     const repeated = [...items, ...items, ...items];
 
     return (

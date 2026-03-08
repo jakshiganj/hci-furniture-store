@@ -60,7 +60,7 @@ export default function RegisterPage() {
                 <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
                     <img
                         src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1200&q=80"
-                        alt="Scandinavian furniture interior"
+                        alt="Srilankan furniture interior"
                         className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-charcoal/30" />

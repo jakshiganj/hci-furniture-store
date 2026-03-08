@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
+import { Menu, X, ShoppingBag, Search, User, LogOut, Package } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
@@ -86,6 +86,11 @@ export default function Navbar() {
               <button className="hidden lg:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
                 <Search size={18} strokeWidth={1.5} />
               </button>
+              {loggedIn && (
+                <Link to="/orders" className="text-charcoal/70 hover:text-charcoal transition-colors" aria-label="My Orders" title="My Orders">
+                  <Package size={18} strokeWidth={1.5} />
+                </Link>
+              )}
               <Link to="/checkout" className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
                 <ShoppingBag size={18} strokeWidth={1.5} />
                 {totalItemsCount > 0 && (
@@ -162,6 +167,21 @@ export default function Navbar() {
                   {link.name}
                 </motion.a>
               ))}
+              {loggedIn && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: navLinks.length * 0.1 }}
+                >
+                  <Link
+                    to="/orders"
+                    className="text-3xl font-serif text-charcoal"
+                    onClick={() => setIsMobileOpen(false)}
+                  >
+                    My Orders
+                  </Link>
+                </motion.div>
+              )}
               {adminLevel && (
                   <>
                     <motion.div

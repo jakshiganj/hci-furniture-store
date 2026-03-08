@@ -17,7 +17,7 @@ export default function Footer() {
                             CeylonVista
                         </h3>
                         <p className="text-sm leading-relaxed max-w-xs mb-6">
-                            Timeless Scandinavian furniture, designed with care and crafted to
+                            Timeless Srilankan furniture, designed with care and crafted to
                             last for generations.
                         </p>
                         <div className="flex items-center gap-4">
