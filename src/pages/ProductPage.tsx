@@ -8,6 +8,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useCart } from '../utils/cart';
 import { supabase } from '../utils/supabase';
+import type { Product } from '../types';
 
 // Placeholder 3D Chair Component
 function ChairPlaceholder() {
@@ -83,18 +84,25 @@ export default function ProductPage() {
   const [addedAnimation, setAddedAnimation] = useState(false);
   const { addItem } = useCart();
   
-  const [dbProduct, setDbProduct] = useState<any>(null);
+  const [dbProduct, setDbProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchProduct() {
         if (!id) return;
         setLoading(true);
-        const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
-        if (!error && data) {
-            setDbProduct(data);
+        try {
+            const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+            if (error) {
+                throw error;
+            }
+            setDbProduct(data as Product);
+        } catch (error: unknown) {
+            console.error('Error fetching product:', error);
+            setDbProduct(null); // Ensure product is null on error
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
     fetchProduct();
   }, [id]);

@@ -18,18 +18,20 @@ const CART_STORAGE_KEY = 'ceylonvista_cart_v1';
 // and emits custom events to cross-communicate between components (like Navbar <-> ProductPage).
 
 export function useCart() {
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  // 1. Initial Load from LocalStorage
-  useEffect(() => {
+  const [items, setItems] = useState<CartItem[]>(() => {
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (savedCart) {
       try {
-        setItems(JSON.parse(savedCart));
+        return JSON.parse(savedCart);
       } catch (e) {
         console.error('Failed to parse cart JSON', e);
+        return [];
       }
     }
+    return [];
+  });
+
+  useEffect(() => {
 
     // 2. Listen for tab-sync or custom events to update state globally
     const handleCartUpdate = () => {

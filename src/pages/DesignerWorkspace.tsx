@@ -191,13 +191,14 @@ function Model({
   setIsDragging: (val: boolean) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const transformRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const transformRef = useRef<any>(null); 
 
   useEffect(() => {
     if (transformRef.current) {
       const controls = transformRef.current;
       
-      const draggingChanged = (e: any) => {
+      const draggingChanged = (e: { value: boolean }) => {
         // e.value is true on drag start, false on drag end.
         setIsDragging(e.value);
         
@@ -211,10 +212,14 @@ function Model({
         }
       };
 
-      controls.addEventListener('dragging-changed', draggingChanged);
+      if (controls) {
+        controls.addEventListener('dragging-changed', draggingChanged);
+      }
       
       return () => {
-        controls.removeEventListener('dragging-changed', draggingChanged);
+        if (controls) {
+          controls.removeEventListener('dragging-changed', draggingChanged);
+        }
       };
     }
   }, [isSelected, item.id, updateItem, setIsDragging]);
@@ -374,9 +379,10 @@ export default function DesignerWorkspace() {
             if (error) throw error;
             
             showToastMessage('Design saved successfully');
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "An unknown error occurred";
             console.error('Error saving to cloud:', error);
-            showToastMessage(`Failed to save: ${error.message}`, 'error');
+            showToastMessage(`Failed to save: ${message}`, 'error');
         } finally {
             setIsSaving(false);
         }

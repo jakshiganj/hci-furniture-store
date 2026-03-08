@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../utils/supabase';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Plus, X, Check, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Product, Order, SavedDesign } from '../types';
 
 // --- PRODUCTS TAB ---
 function ProductsTab() {
-    const [products, setProducts] = useState<any[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     
@@ -24,18 +25,18 @@ function ProductsTab() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    async function fetchProducts() {
-        setLoading(true);
+    const fetchProducts = useCallback(async () => {
         const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-        if (!error && data) setProducts(data);
+        if (!error && data) setProducts(data as Product[]);
         setLoading(false);
-    }
-
-    useEffect(() => {
-        fetchProducts();
     }, []);
 
+    useEffect(() => {
+        Promise.resolve().then(() => fetchProducts());
+    }, [fetchProducts]);
+
     async function toggleActive(id: string, currentStatus: boolean) {
+        setLoading(true);
         await supabase.from('products').update({ is_active: !currentStatus }).eq('id', id);
         fetchProducts();
     }
@@ -63,6 +64,7 @@ function ProductsTab() {
         setNewPrice('');
         setNewCategory('Furniture');
         setIsAddModalOpen(false);
+        setLoading(true);
         fetchProducts();
     }
 
@@ -215,21 +217,20 @@ function ProductsTab() {
 
 // --- ORDERS TAB ---
 function OrdersTab() {
-    const [orders, setOrders] = useState<any[]>([]);
+    const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
-    async function fetchOrders() {
-        setLoading(true);
+    const fetchOrders = useCallback(async () => {
         const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-        if (!error && data) setOrders(data);
+        if (!error && data) setOrders(data as Order[]);
         setLoading(false);
-    }
-
-    useEffect(() => {
-        fetchOrders();
     }, []);
 
-    async function updateOrderStatus(id: string, newStatus: string) {
+    useEffect(() => {
+        Promise.resolve().then(() => fetchOrders());
+    }, [fetchOrders]);
+
+    async function updateOrderStatus(id: string, newStatus: Order['status']) {
         // Optimistically update local state for snappy UX
         setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
         
@@ -269,7 +270,7 @@ function OrdersTab() {
                                         <div className="relative inline-block">
                                             <select 
                                                 value={o.status || 'pending'} 
-                                                onChange={(e) => updateOrderStatus(o.id, e.target.value)}
+                                                onChange={(e) => updateOrderStatus(o.id, e.target.value as Order['status'])}
                                                 className={`appearance-none outline-none cursor-pointer pr-8 pl-3 py-1.5 text-[11px] font-medium uppercase tracking-wider rounded-full border border-transparent transition-all hover:border-charcoal/20 focus:border-sage focus:ring-1 focus:ring-sage focus:ring-opacity-50
                                                     ${o.status === 'pending' ? 'bg-amber-100/70 text-amber-800' : 
                                                       o.status === 'processing' ? 'bg-blue-100/70 text-blue-800' :
@@ -309,19 +310,18 @@ function OrdersTab() {
 
 // --- DESIGNS TAB ---
 function DesignsTab() {
-    const [designs, setDesigns] = useState<any[]>([]);
+    const [designs, setDesigns] = useState<SavedDesign[]>([]);
     const [loading, setLoading] = useState(true);
 
-    async function fetchDesigns() {
-        setLoading(true);
+    const fetchDesigns = useCallback(async () => {
         const { data, error } = await supabase.from('saved_designs').select('*').order('created_at', { ascending: false });
-        if (!error && data) setDesigns(data);
+        if (!error && data) setDesigns(data as SavedDesign[]);
         setLoading(false);
-    }
+    }, []);
 
     useEffect(() => {
-        fetchDesigns();
-    }, []);
+        Promise.resolve().then(() => fetchDesigns());
+    }, [fetchDesigns]);
 
     return (
         <div>

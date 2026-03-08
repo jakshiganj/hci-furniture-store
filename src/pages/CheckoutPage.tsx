@@ -98,9 +98,10 @@ export default function CheckoutPage() {
         navigate('/');
       }, 4000);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred";
       console.error("Order failed:", error);
-      showToastMessage(`Checkout failed: ${error.message}`, 'error');
+      showToastMessage(`Checkout failed: ${message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }

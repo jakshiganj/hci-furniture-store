@@ -3,8 +3,9 @@ import { useRef, useState, useEffect } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import type { Product } from '../types';
 
-function ProductCard({ product, index }: { product: any; index: number }) {
+function ProductCard({ product, index }: { product: Product; index: number }) {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-80px' });
 
@@ -55,7 +56,7 @@ function ProductCard({ product, index }: { product: any; index: number }) {
 export default function ProductGrid() {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-100px' });
-    const [products, setProducts] = useState<any[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
 
     useEffect(() => {
         async function fetchProducts() {
