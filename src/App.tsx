@@ -9,6 +9,7 @@ import ProductGrid from './components/ProductGrid'
 import Collections from './components/Collections'
 import CreateDesign from './components/CreateDesign'
 import Testimonials from './components/Testimonials'
+import ImageMarquee from './components/ImageMarquee'
 import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
 import LoginPage from './pages/LoginPage'
@@ -19,6 +20,8 @@ import CheckoutPage from './pages/CheckoutPage'
 import PastOrders from './pages/PastOrders'
 import ProductsPage from './pages/ProductsPage'
 import JournalPage from './pages/JournalPage'
+import AboutPage from './pages/AboutPage'
+import ContactPage from './pages/ContactPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
 
@@ -33,6 +36,7 @@ function HomePage() {
       <ProductGrid />
       <Collections />
       <Testimonials />
+      <ImageMarquee />
       <Newsletter />
       <Footer />
     </>
@@ -52,6 +56,8 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/journal" element={<JournalPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         
         {/* Protected Customer Routes */}
         <Route path="/orders" element={

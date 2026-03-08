@@ -10,13 +10,13 @@ const footerLinks: Record<string, { label: string; to: string }[]> = {
         { label: 'Lighting', to: '/products' },
     ],
     Company: [
-        { label: 'About Us', to: '/#about' },
-        { label: 'Our Story', to: '/#about' },
+        { label: 'About Us', to: '/about' },
+        { label: 'Our Story', to: '/about' },
         { label: 'Journal', to: '/journal' },
-        { label: 'Sustainability', to: '/#about' },
+        { label: 'Sustainability', to: '/about' },
     ],
     Support: [
-        { label: 'Contact', to: '/#about' },
+        { label: 'Contact', to: '/contact' },
         { label: 'Shipping', to: '/#about' },
         { label: 'Returns', to: '/#about' },
         { label: 'FAQ', to: '/#about' },

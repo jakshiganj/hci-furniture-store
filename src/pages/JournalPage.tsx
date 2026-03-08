@@ -49,22 +49,44 @@ export default function JournalPage() {
       <Navbar />
 
       <main className="flex-grow w-full">
-        {/* Header Section */}
-        <section className="py-20 lg:py-32 px-6 lg:px-10 max-w-7xl mx-auto">
-            <motion.div 
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="max-w-3xl"
+        {/* ════════ HERO — Full-bleed image with centered title ════════ */}
+        <section className="relative min-h-[60vh] md:min-h-[70vh] flex items-center justify-center overflow-hidden mb-20 lg:mb-32">
+          <div className="absolute inset-0">
+            <img
+              src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1920&q=80"
+              alt="CeylonVista Journal Hero"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-charcoal/40" />
+          </div>
+          <div className="relative z-10 text-center px-6">
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.2 }}
+              className="text-[12px] tracking-[0.3em] uppercase text-white/60 mb-5"
             >
-                <p className="text-[12px] tracking-[0.3em] uppercase text-stone-dark mb-6">Editorial</p>
-                <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl text-charcoal leading-tight mb-8">
-                    Stories of <span className="italic">Design</span> & Living
-                </h1>
-                <p className="text-xl text-charcoal/70 font-light max-w-xl text-balance">
-                    Perspectives on intentional living, modern aesthetics, and the philosophies that shape our environments.
-                </p>
-            </motion.div>
+              ✦ Editorial
+            </motion.p>
+            <motion.h1
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.35 }}
+              className="font-serif text-5xl md:text-7xl lg:text-8xl text-white leading-[1.05]"
+            >
+              Stories of
+              <br />
+              <span className="italic">Design</span> & Living
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.7 }}
+              className="text-white/70 text-sm md:text-base mt-6 max-w-lg mx-auto font-light leading-relaxed text-balance"
+            >
+              Perspectives on intentional living, modern aesthetics, and the philosophies that shape our environments.
+            </motion.p>
+          </div>
         </section>
 
         {/* Featured Article */}

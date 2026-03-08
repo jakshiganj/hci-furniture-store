@@ -8,7 +8,7 @@ import { useCart } from '../utils/cart';
 const navLinks = [
   { name: 'Shop', href: '/products', isRoute: true },
   { name: 'Collections', href: '/#collections', isRoute: false, hash: 'collections' },
-  { name: 'About', href: '/#about', isRoute: false, hash: 'about' },
+  { name: 'About', href: '/about', isRoute: true },
   { name: 'Journal', href: '/journal', isRoute: true },
 ];
 
