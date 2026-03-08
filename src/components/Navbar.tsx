@@ -1,25 +1,29 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { isLoggedIn, logout, getUser } from '../utils/auth';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
 
 const navLinks = [
-  { name: 'Shop', href: '#shop' },
-  { name: 'Collections', href: '#collections' },
-  { name: 'About', href: '#about' },
-  { name: 'Journal', href: '#journal' },
+  { name: 'Shop', href: '/#shop' },
+  { name: 'Collections', href: '/#collections' },
+  { name: 'About', href: '/#about' },
+  { name: 'Journal', href: '/journal' },
 ];
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const loggedIn = isLoggedIn();
+  const adminLevel = isAdmin();
   // Retrieve the current user's data (name, email) from localStorage session
   const user = getUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const { totalItemsCount } = useCart();
+  
+  const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/designer');
 
   const handleLogout = () => {
     logout();
@@ -52,8 +56,8 @@ export default function Navbar() {
             </a>
 
             {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-10">
-              {navLinks.map((link) => (
+            <div className="hidden lg:flex items-center gap-6 xl:gap-8">
+              {!isAdminPage && navLinks.map((link) => (
                 <a
                   key={link.name}
                   href={link.href}
@@ -63,11 +67,23 @@ export default function Navbar() {
                   <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
                 </a>
               ))}
+              {adminLevel && (
+                  <>
+                    <Link to="/designer" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                        Designer
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                    </Link>
+                    <Link to="/admin" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                        Admin
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                    </Link>
+                  </>
+              )}
             </div>
 
             {/* Icons */}
-            <div className="flex items-center gap-5">
-              <button className="hidden md:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
+            <div className="flex items-center gap-4 lg:gap-5">
+              <button className="hidden lg:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
                 <Search size={18} strokeWidth={1.5} />
               </button>
               <Link to="/checkout" className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
@@ -106,7 +122,7 @@ export default function Navbar() {
                 </Link>
               )}
               <button
-                className="md:hidden text-charcoal/70 hover:text-charcoal transition-colors"
+                className="lg:hidden text-charcoal/70 hover:text-charcoal transition-colors"
                 onClick={() => setIsMobileOpen(true)}
                 aria-label="Menu"
               >
@@ -133,7 +149,7 @@ export default function Navbar() {
               </button>
             </div>
             <div className="flex flex-col items-center justify-center flex-1 gap-8">
-              {navLinks.map((link, i) => (
+              {!isAdminPage && navLinks.map((link, i) => (
                 <motion.a
                   key={link.name}
                   href={link.href}
@@ -146,6 +162,31 @@ export default function Navbar() {
                   {link.name}
                 </motion.a>
               ))}
+              {adminLevel && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: navLinks.length * 0.1 }}
+                      className="mt-4 pt-4 border-t border-charcoal/10 w-32 text-center flex flex-col gap-6"
+                    >
+                        <Link 
+                            to="/designer" 
+                            className="text-2xl font-serif text-sage"
+                            onClick={() => setIsMobileOpen(false)}
+                        >
+                            Designer
+                        </Link>
+                        <Link 
+                            to="/admin" 
+                            className="text-2xl font-serif text-sage"
+                            onClick={() => setIsMobileOpen(false)}
+                        >
+                            Admin
+                        </Link>
+                    </motion.div>
+                  </>
+              )}
             </div>
           </motion.div>
         )}

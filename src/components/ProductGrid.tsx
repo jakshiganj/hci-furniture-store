@@ -1,48 +1,10 @@
 import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../utils/supabase';
 
-const products = [
-    {
-        name: 'Oslo Lounge Chair',
-        price: '$1,290',
-        category: 'Seating',
-        image: 'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?w=800&q=80',
-    },
-    {
-        name: 'Bergen Coffee Table',
-        price: '$890',
-        category: 'Tables',
-        image: 'https://images.unsplash.com/photo-1532372320572-cda25653a26d?w=800&q=80',
-    },
-    {
-        name: 'Fjord Pendant Light',
-        price: '$420',
-        category: 'Lighting',
-        image: 'https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=800&q=80',
-    },
-    {
-        name: 'Nordic Sideboard',
-        price: '$1,650',
-        category: 'Storage',
-        image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80',
-    },
-    {
-        name: 'Scandic Dining Chair',
-        price: '$540',
-        category: 'Seating',
-        image: 'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=800&q=80',
-    },
-    {
-        name: 'Timber Floor Lamp',
-        price: '$380',
-        category: 'Lighting',
-        image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80',
-    },
-];
-
-function ProductCard({ product, index }: { product: typeof products[0]; index: number }) {
+function ProductCard({ product, index }: { product: any; index: number }) {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-80px' });
 
@@ -54,11 +16,11 @@ function ProductCard({ product, index }: { product: typeof products[0]; index: n
             transition={{ duration: 0.7, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
             className="group cursor-pointer"
         >
-            <Link to={`/product/${index + 1}`} className="block">
+            <Link to={`/product/${product.id}`} className="block">
             {/* Image */}
             <div className="relative overflow-hidden bg-stone-light aspect-[3/4] mb-5">
                 <img
-                    src={product.image}
+                    src={product.image_url || 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=800&q=80'}
                     alt={product.name}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     loading="lazy"
@@ -83,7 +45,7 @@ function ProductCard({ product, index }: { product: typeof products[0]; index: n
                         {product.name}
                     </h3>
                 </div>
-                <span className="text-sm text-charcoal/70 mt-1">{product.price}</span>
+                <span className="text-sm text-charcoal/70 mt-1">${product.price.toLocaleString()}</span>
             </div>
             </Link>
         </motion.div>
@@ -93,6 +55,22 @@ function ProductCard({ product, index }: { product: typeof products[0]; index: n
 export default function ProductGrid() {
     const ref = useRef(null);
     const inView = useInView(ref, { once: true, margin: '-100px' });
+    const [products, setProducts] = useState<any[]>([]);
+
+    useEffect(() => {
+        async function fetchProducts() {
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: true });
+                
+            if (!error && data) {
+                setProducts(data);
+            }
+        }
+        fetchProducts();
+    }, []);
 
     return (
         <section id="shop" className="py-28 lg:py-40 bg-warm-white">
@@ -125,7 +103,7 @@ export default function ProductGrid() {
                 {/* Grid */}
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
                     {products.map((product, i) => (
-                        <ProductCard key={product.name} product={product} index={i} />
+                        <ProductCard key={product.id} product={product} index={i} />
                     ))}
                 </div>
             </div>

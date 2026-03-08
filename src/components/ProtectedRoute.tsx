@@ -10,17 +10,23 @@
  */
 
 import { Navigate } from 'react-router-dom';
-import { isLoggedIn } from '../utils/auth';
+import { isLoggedIn, isAdmin } from '../utils/auth';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
+    requireAdmin?: boolean;
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
     // Check if user has an active session in localStorage
     if (!isLoggedIn()) {
         // No session → redirect to login page
         return <Navigate to="/login" replace />;
+    }
+
+    if (requireAdmin && !isAdmin()) {
+        // Non-admins attempting to access admin route → redirect to homepage
+        return <Navigate to="/" replace />;
     }
 
     // Session exists → render the protected content

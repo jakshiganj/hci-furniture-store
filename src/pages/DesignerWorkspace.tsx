@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
 import { 
   OrbitControls, 
@@ -11,7 +12,7 @@ import {
   Box as BoxShape,
   Cylinder as CylinderShape
 } from '@react-three/drei';
-import { ArrowLeft, Box as BoxIcon, Move, RotateCw, Trash2, LayoutTemplate, Save } from 'lucide-react';
+import { ArrowLeft, Box as BoxIcon, Move, RotateCw, Trash2, LayoutTemplate, Save, Check, AlertCircle } from 'lucide-react';
 import * as THREE from 'three';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
@@ -238,6 +239,7 @@ function Model({
           // @ts-expect-error type incompatibility in newer drei versions
           object={groupRef} 
           mode={transformMode}
+          showY={false}
         />
       )}
     </>
@@ -294,6 +296,12 @@ export default function DesignerWorkspace() {
     const [isDragging, setIsDragging] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<string>(ROOMS[0].id);
     const [isSaving, setIsSaving] = useState(false);
+    const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+    const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
 
@@ -349,7 +357,7 @@ export default function DesignerWorkspace() {
     const handleSave = async () => {
         const user = getUser();
         if (!user?.id) {
-            alert('Please sign in to save your 3D designs to the cloud computing systems.');
+            showToastMessage('Please sign in to save your 3D designs to the cloud computing systems.', 'error');
             return;
         }
 
@@ -364,11 +372,11 @@ export default function DesignerWorkspace() {
             });
 
             if (error) throw error;
-            // Success provides a gentle browser alert
-            alert('Design saved successfully to the Supabase Database!');
+            
+            showToastMessage('Design saved successfully');
         } catch (error: any) {
             console.error('Error saving to cloud:', error);
-            alert(`Failed to save: ${error.message}`);
+            showToastMessage(`Failed to save: ${error.message}`, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -532,6 +540,24 @@ export default function DesignerWorkspace() {
                     </Canvas>
                 </section>
             </main>
+
+            {/* Success/Error Toast */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                        className="fixed bottom-8 right-8 bg-charcoal text-white px-6 py-4 shadow-xl flex items-center gap-3 z-50 pointer-events-none"
+                    >
+                        <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-500'}`}>
+                            {toast.type === 'success' ? <Check size={14} strokeWidth={3} /> : <AlertCircle size={14} strokeWidth={3} />}
+                        </div>
+                        <span className="text-sm tracking-wide">{toast.message}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

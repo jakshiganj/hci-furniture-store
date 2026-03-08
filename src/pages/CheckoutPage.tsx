@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ArrowRight, ShieldCheck, ArrowLeft, Plus, Minus, CreditCard } from 'lucide-react';
+import { Trash2, ArrowRight, ShieldCheck, ArrowLeft, Plus, Minus, CreditCard, Check, AlertCircle } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useCart } from '../utils/cart';
@@ -13,6 +13,14 @@ export default function CheckoutPage() {
   const { items, cartSubtotal, updateQuantity, removeItem, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  
+  // Toast state
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
+  const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
+      setToast({ message, type });
+      setTimeout(() => setToast(null), 3000);
+  };
 
   // Form State
   const [shippingDetails, setShippingDetails] = useState({
@@ -47,7 +55,7 @@ export default function CheckoutPage() {
       // We'll proceed with user.id if logged in. 
       // In a real app allowing guests, we'd handle anonymous orders differently.
       if (!user?.id) {
-        alert("Please log in to place an order.");
+        showToastMessage("Please log in to place an order.", 'error');
         setIsSubmitting(false);
         return;
       }
@@ -92,7 +100,7 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error("Order failed:", error);
-      alert(`Checkout failed: ${error.message}`);
+      showToastMessage(`Checkout failed: ${error.message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -266,6 +274,24 @@ export default function CheckoutPage() {
             </div>
         )}
       </main>
+
+      {/* Success/Error Toast */}
+      <AnimatePresence>
+          {toast && (
+              <motion.div
+                  initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className="fixed bottom-8 right-8 bg-charcoal text-white px-6 py-4 shadow-xl flex items-center gap-3 z-50 pointer-events-none"
+              >
+                  <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-500'}`}>
+                      {toast.type === 'success' ? <Check size={14} strokeWidth={3} /> : <AlertCircle size={14} strokeWidth={3} />}
+                  </div>
+                  <span className="text-sm tracking-wide">{toast.message}</span>
+              </motion.div>
+          )}
+      </AnimatePresence>
       
       <Footer />
     </div>

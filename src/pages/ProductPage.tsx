@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Minus, ShoppingCart, Box, Image as ImageIcon, Check } 
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useCart } from '../utils/cart';
+import { supabase } from '../utils/supabase';
 
 // Placeholder 3D Chair Component
 function ChairPlaceholder() {
@@ -43,25 +44,6 @@ function ChairPlaceholder() {
   );
 }
 
-// Mock Data
-const productData = {
-  id: '11111111-1111-1111-1111-111111111111',
-  name: 'Oslo Lounge Chair',
-  priceValue: 1290,
-  priceString: '$1,290',
-  category: 'Seating',
-  description: 'The Oslo Lounge Chair brings timeless Scandinavian aesthetics to your living space. Designed with a deep, curved seat and premium textured fabric, it offers unmatched comfort without compromising on its minimalist silhouette.',
-  details: {
-    dimensions: 'W 82cm x D 76cm x H 78cm',
-    materials: 'Oak wood frame, High-density foam, Premium Wool-blend upholstery',
-    care: 'Professional dry cleaning recommended. Vacuum regularly with a soft brush attachment.',
-  },
-  images: [
-    'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?w=1200&q=80',
-    'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=1200&q=80'
-  ]
-};
-
 function Accordion({ title, content }: { title: string, content: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -94,15 +76,65 @@ function Accordion({ title, content }: { title: string, content: string }) {
 }
 
 export default function ProductPage() {
-  useParams();
+  const { id } = useParams();
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [addedAnimation, setAddedAnimation] = useState(false);
   const { addItem } = useCart();
+  
+  const [dbProduct, setDbProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // In a real app, use the ID to fetch product data. We use mock data here.
-  const product = productData;
+  useEffect(() => {
+    async function fetchProduct() {
+        if (!id) return;
+        setLoading(true);
+        const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+        if (!error && data) {
+            setDbProduct(data);
+        }
+        setLoading(false);
+    }
+    fetchProduct();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-20">
+        <Navbar />
+        <p className="text-charcoal/50 uppercase tracking-widest text-sm">Loading Product...</p>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!dbProduct) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-20 flex-col gap-6">
+        <Navbar />
+        <h2 className="text-3xl font-serif text-charcoal">Product Not Found</h2>
+        <Link to="/" className="text-sm underline text-charcoal/70 hover:text-charcoal">Return to Homepage</Link>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Map DB variables to standard frontend variables
+  const product = {
+    id: dbProduct.id,
+    name: dbProduct.name,
+    priceValue: dbProduct.price,
+    priceString: `$${dbProduct.price.toLocaleString()}`,
+    category: dbProduct.category,
+    description: dbProduct.description || "A beautifully crafted piece for modern living spaces.",
+    images: [dbProduct.image_url || 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=800&q=80'],
+    details: {
+        dimensions: 'W 82cm x D 76cm x H 78cm (Standard size)',
+        materials: 'Premium materials sourced sustainably.',
+        care: 'Professional dry cleaning recommended. Vacuum regularly with a soft brush attachment.',
+    }
+  };
 
   const handleAddToCart = () => {
     addItem({
@@ -125,7 +157,7 @@ export default function ProductPage() {
     <div className="min-h-screen flex flex-col pt-20">
       <Navbar />
       
-      <main className="flex-grow w-full">
+      <main className="flex-grow w-full bg-warm-white">
         {/* Back Navigation */}
         <div className="mx-auto max-w-7xl px-6 lg:px-10 py-6">
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-charcoal/60 hover:text-charcoal transition-colors group">

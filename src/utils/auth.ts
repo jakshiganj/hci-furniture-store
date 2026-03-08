@@ -22,11 +22,21 @@ export async function login(email: string, password: string): Promise<boolean> {
         }
 
         if (data.session) {
+            // Fetch the user's assigned role from the database profiles table
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user.id)
+                .single();
+
+            const role = profile?.role || 'customer';
+
             // Cache the user info so existing synchronous UI components (like Navbar) still work seamlessly
             localStorage.setItem(AUTH_KEY, JSON.stringify({ 
                 email: data.user.email, 
                 name: data.user.user_metadata?.first_name || data.user.email?.split('@')[0],
                 id: data.user.id,
+                role: role,
                 loggedInAt: Date.now() 
             }));
             return true;
@@ -62,10 +72,20 @@ export function isLoggedIn(): boolean {
  *
  * @returns user object with email and name, or null if not logged in
  */
-export function getUser(): { email: string; name?: string; id?: string } | null {
+export function getUser(): { email: string; name?: string; id?: string; role?: string } | null {
     const data = localStorage.getItem(AUTH_KEY);
     if (!data) return null;
     return JSON.parse(data);
+}
+
+/**
+ * Synchronous check if the currently logged-in user is an admin.
+ * 
+ * @returns true if the user's role in the session cache is 'admin'
+ */
+export function isAdmin(): boolean {
+    const user = getUser();
+    return user?.role === 'admin';
 }
 
 /**

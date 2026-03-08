@@ -15,7 +15,9 @@ import RegisterPage from './pages/RegisterPage'
 import DesignerWorkspace from './pages/DesignerWorkspace'
 import ProductPage from './pages/ProductPage'
 import CheckoutPage from './pages/CheckoutPage'
-// ProtectedRoute is available at './components/ProtectedRoute' for future dashboard/designer routes
+import JournalPage from './pages/JournalPage'
+import ProtectedRoute from './components/ProtectedRoute'
+import AdminDashboard from './pages/AdminDashboard'
 
 function HomePage() {
   return (
@@ -43,12 +45,23 @@ function App() {
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/designer" element={<DesignerWorkspace />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/journal" element={<JournalPage />} />
+        
+        {/* Protected Admin Routes */}
+        <Route path="/designer" element={
+          <ProtectedRoute requireAdmin={true}>
+            <DesignerWorkspace />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin" element={
+            <ProtectedRoute requireAdmin={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+        } />
       </Routes>
     </div>
   )
 }
 
 export default App
-
