@@ -6,10 +6,10 @@ import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
 
 const navLinks = [
-  { name: 'Shop', href: '/products' },
-  { name: 'Collections', href: '/#collections' },
-  { name: 'About', href: '/#about' },
-  { name: 'Journal', href: '/journal' },
+  { name: 'Shop', href: '/products', isRoute: true },
+  { name: 'Collections', href: '/#collections', isRoute: false, hash: 'collections' },
+  { name: 'About', href: '/#about', isRoute: false, hash: 'about' },
+  { name: 'Journal', href: '/journal', isRoute: true },
 ];
 
 export default function Navbar() {
@@ -51,21 +51,41 @@ export default function Navbar() {
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <a href="#top" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
+            <Link to="/" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
               CeylonVista
-            </a>
+            </Link>
 
             {/* Desktop Nav */}
             <div className="hidden lg:flex items-center gap-6 xl:gap-8">
               {!isAdminPage && navLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.href}
-                  className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
-                >
-                  {link.name}
-                  <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
-                </a>
+                link.isRoute ? (
+                  <Link
+                    key={link.name}
+                    to={link.href}
+                    className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
+                  >
+                    {link.name}
+                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
+                  </Link>
+                ) : (
+                  <button
+                    key={link.name}
+                    onClick={() => {
+                      if (location.pathname !== '/') {
+                        navigate('/');
+                        setTimeout(() => {
+                          document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      } else {
+                        document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
+                  >
+                    {link.name}
+                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
+                  </button>
+                )
               ))}
               {adminLevel && (
                   <>
@@ -155,17 +175,43 @@ export default function Navbar() {
             </div>
             <div className="flex flex-col items-center justify-center flex-1 gap-8">
               {!isAdminPage && navLinks.map((link, i) => (
-                <motion.a
-                  key={link.name}
-                  href={link.href}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="text-3xl font-serif text-charcoal"
-                  onClick={() => setIsMobileOpen(false)}
-                >
-                  {link.name}
-                </motion.a>
+                link.isRoute ? (
+                  <motion.div
+                    key={link.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                  >
+                    <Link
+                      to={link.href}
+                      className="text-3xl font-serif text-charcoal"
+                      onClick={() => setIsMobileOpen(false)}
+                    >
+                      {link.name}
+                    </Link>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key={link.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="text-3xl font-serif text-charcoal"
+                    onClick={() => {
+                      setIsMobileOpen(false);
+                      if (location.pathname !== '/') {
+                        navigate('/');
+                        setTimeout(() => {
+                          document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      } else {
+                        document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                  >
+                    {link.name}
+                  </motion.button>
+                )
               ))}
               {loggedIn && (
                 <motion.div

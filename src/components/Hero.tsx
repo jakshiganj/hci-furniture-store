@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function Hero() {
     return (
@@ -55,19 +56,19 @@ export default function Hero() {
                         transition={{ duration: 0.8, delay: 0.9 }}
                         className="flex items-center gap-6"
                     >
-                        <a
-                            href="#shop"
+                        <Link
+                            to="/products"
                             className="group inline-flex items-center gap-3 bg-white text-charcoal px-8 py-4 text-[13px] tracking-[0.15em] uppercase hover:bg-cream transition-colors duration-300"
                         >
                             Explore Collection
                             <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform duration-300" />
-                        </a>
-                        <a
-                            href="#about"
+                        </Link>
+                        <button
+                            onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}
                             className="text-[13px] tracking-[0.15em] uppercase text-white/70 hover:text-white transition-colors duration-300 border-b border-white/30 pb-0.5"
                         >
                             Our Story
-                        </a>
+                        </button>
                     </motion.div>
                 </div>
             </div>
