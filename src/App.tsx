@@ -40,8 +40,8 @@ function HomePage() {
 function App() {
   return (
     <div className="min-h-screen">
+      <Analytics />
       <Routes>
-        <Analytics />
         {/* Public: accessible without login */}
         <Route path="/" element={<HomePage />} />
         <Route path="/product/:id" element={<ProductPage />} />
