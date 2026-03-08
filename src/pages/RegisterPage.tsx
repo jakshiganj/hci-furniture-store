@@ -17,7 +17,7 @@ export default function RegisterPage() {
     // Track successful registration to show animated success message
     const [success, setSuccess] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setSuccess('');
@@ -34,19 +34,18 @@ export default function RegisterPage() {
 
         setIsLoading(true);
 
-        setTimeout(() => {
-            const result = register(name, email, password);
-            if (result.success) {
-                // Show full-screen success overlay, then redirect to login after 2 seconds
-                setSuccess('Account created successfully');
-                setIsLoading(false);
-                // Redirect to login page after 2 seconds
-                setTimeout(() => navigate('/login'), 2000);
-            } else {
-                setError(result.message);
-                setIsLoading(false);
-            }
-        }, 600);
+        const result = await register(name, email, password);
+        
+        if (result.success) {
+            // Show full-screen success overlay, then redirect to login after 2 seconds
+            setSuccess('Account created successfully');
+            setIsLoading(false);
+            // Redirect to login page after 2 seconds
+            setTimeout(() => navigate('/login'), 2000);
+        } else {
+            setError(result.message);
+            setIsLoading(false);
+        }
     };
 
     return (

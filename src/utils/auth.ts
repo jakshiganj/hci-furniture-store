@@ -1,99 +1,125 @@
+import { supabase } from './supabase';
 
-// localStorage key for the current session (stores logged-in user info)
+// localStorage key for the current session cache (stores logged-in user info for synchronous UI checks)
 const AUTH_KEY = "furniture_store_auth";
 
-// localStorage key for the registered users array
-const USERS_KEY = "furniture_store_users";
-
-// Built-in demo credentials for quick testing
-const DEMO_CREDENTIALS = {
-    email: "admin@gmail.com",
-    password: "1234",
-};
-
-/** Shape of a user stored in the registered users array */
-interface StoredUser {
-    name: string;
-    email: string;
-    password: string;
-}
-
 /**
- * Attempt to log in with the given credentials.
- * Checks demo credentials first, then registered users in localStorage.
- * On success, stores a session object in localStorage.
+ * Attempt to log in with the given credentials using Supabase.
+ * On success, stores a temporary synchronous session object in localStorage for the UI.
  *
  * @returns true if credentials are valid, false otherwise
  */
-export function login(email: string, password: string): boolean {
-    // Check demo credentials first
-    if (
-        email === DEMO_CREDENTIALS.email &&
-        password === DEMO_CREDENTIALS.password
-    ) {
-        // Store session with name "Admin" for the demo account (used for greeting display)
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ email, name: "Admin", loggedInAt: Date.now() }));
-        return true;
-    }
+export async function login(email: string, password: string): Promise<boolean> {
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
 
-    // Check registered users stored in localStorage
-    const users: StoredUser[] = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
-    const found = users.find((u) => u.email === email && u.password === password);
-    if (found) {
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ email: found.email, name: found.name, loggedInAt: Date.now() }));
-        return true;
-    }
+        if (error) {
+            console.error("Supabase Login Error:", error.message);
+            return false;
+        }
 
-    // No match found
-    console.log("Invalid login");
-    return false;
+        if (data.session) {
+            // Cache the user info so existing synchronous UI components (like Navbar) still work seamlessly
+            localStorage.setItem(AUTH_KEY, JSON.stringify({ 
+                email: data.user.email, 
+                name: data.user.user_metadata?.first_name || data.user.email?.split('@')[0],
+                id: data.user.id,
+                loggedInAt: Date.now() 
+            }));
+            return true;
+        }
+        
+        return false;
+    } catch (err) {
+        console.error("Login failed", err);
+        return false;
+    }
 }
 
 /**
- * Log the current user out by removing their session from localStorage.
+ * Log the current user out of Supabase and remove the UI session cache.
  */
-export function logout(): void {
+export async function logout(): Promise<void> {
+    await supabase.auth.signOut();
     localStorage.removeItem(AUTH_KEY);
 }
 
 /**
- * Check if a user is currently logged in.
- * Used by ProtectedRoute and Navbar to gate access and toggle UI.
+ * Synchronous check if a user is currently logged in.
+ * Relies on the local cache for immediate UI rendering logic.
  *
- * @returns true if a session exists in localStorage
+ * @returns true if a session cache exists in localStorage
  */
 export function isLoggedIn(): boolean {
     return localStorage.getItem(AUTH_KEY) !== null;
 }
 
 /**
- * Retrieve the current logged-in user's data from the session.
+ * Retrieve the current logged-in user's data from the synchronous session cache.
  *
- * @returns user object with email (and optionally name), or null if not logged in
+ * @returns user object with email and name, or null if not logged in
  */
-export function getUser(): { email: string; name?: string } | null {
+export function getUser(): { email: string; name?: string; id?: string } | null {
     const data = localStorage.getItem(AUTH_KEY);
     if (!data) return null;
     return JSON.parse(data);
 }
 
 /**
- * Register a new user account.
- * Stores the user in the localStorage users array.
- * Prevents duplicate email registrations.
+ * Register a new user account with Supabase Auth.
+ * Automatically inserts a profile record if successful.
  *
  * @returns object with success boolean and a human-readable message
  */
-export function register(name: string, email: string, password: string): { success: boolean; message: string } {
-    const users: StoredUser[] = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+export async function register(name: string, email: string, password: string): Promise<{ success: boolean; message: string }> {
+    try {
+        // Split name for metadata
+        const [firstName, ...rest] = name.split(' ');
+        const lastName = rest.join(' ');
 
-    // Prevent duplicate registrations
-    if (users.some((u) => u.email === email)) {
-        return { success: false, message: "An account with this email already exists." };
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    first_name: firstName,
+                    last_name: lastName
+                }
+            }
+        });
+
+        if (error) {
+            // Provide user-friendly errors
+            if (error.message.includes('already registered')) {
+                return { success: false, message: "An account with this email already exists." };
+            }
+            return { success: false, message: error.message };
+        }
+
+        if (data.user) {
+            // Depending on Supabase settings, sign up might require email verification.
+            // If they are auto-logged in or return a user, we consider registration successful.
+            
+            // Also explicitly create the profile record since the trigger isn't set up
+            const { error: profileError } = await supabase.from('profiles').insert({
+                id: data.user.id,
+                first_name: firstName,
+                last_name: lastName,
+                role: 'customer'
+            });
+
+            if (profileError) console.warn("Could not create profile record:", profileError);
+
+            return { success: true, message: "Account created successfully!" };
+        }
+
+        return { success: false, message: "Failed to create account. Please try again." };
+
+    } catch (err) {
+        console.error("Registration failed", err);
+        return { success: false, message: "An unexpected error occurred." };
     }
-
-    // Store the new user
-    users.push({ name, email, password });
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    return { success: true, message: "Account created successfully!" };
 }

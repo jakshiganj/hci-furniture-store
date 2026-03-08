@@ -1,6 +1,7 @@
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const products = [
     {
@@ -53,6 +54,7 @@ function ProductCard({ product, index }: { product: typeof products[0]; index: n
             transition={{ duration: 0.7, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
             className="group cursor-pointer"
         >
+            <Link to={`/product/${index + 1}`} className="block">
             {/* Image */}
             <div className="relative overflow-hidden bg-stone-light aspect-[3/4] mb-5">
                 <img
@@ -83,6 +85,7 @@ function ProductCard({ product, index }: { product: typeof products[0]; index: n
                 </div>
                 <span className="text-sm text-charcoal/70 mt-1">{product.price}</span>
             </div>
+            </Link>
         </motion.div>
     );
 }

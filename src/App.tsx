@@ -13,6 +13,8 @@ import Footer from './components/Footer'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DesignerWorkspace from './pages/DesignerWorkspace'
+import ProductPage from './pages/ProductPage'
+import CheckoutPage from './pages/CheckoutPage'
 // ProtectedRoute is available at './components/ProtectedRoute' for future dashboard/designer routes
 
 function HomePage() {
@@ -38,9 +40,11 @@ function App() {
       <Routes>
         {/* Public: accessible without login */}
         <Route path="/" element={<HomePage />} />
+        <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/designer" element={<DesignerWorkspace />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
       </Routes>
     </div>
   )

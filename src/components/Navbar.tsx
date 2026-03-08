@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isLoggedIn, logout, getUser } from '../utils/auth';
+import { useCart } from '../utils/cart';
 
 const navLinks = [
   { name: 'Shop', href: '#shop' },
@@ -18,6 +19,7 @@ export default function Navbar() {
   // Retrieve the current user's data (name, email) from localStorage session
   const user = getUser();
   const navigate = useNavigate();
+  const { totalItemsCount } = useCart();
 
   const handleLogout = () => {
     logout();
@@ -68,12 +70,14 @@ export default function Navbar() {
               <button className="hidden md:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
                 <Search size={18} strokeWidth={1.5} />
               </button>
-              <button className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
+              <Link to="/checkout" className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
                 <ShoppingBag size={18} strokeWidth={1.5} />
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-sage text-white text-[9px] rounded-full flex items-center justify-center font-medium">
-                  2
-                </span>
-              </button>
+                {totalItemsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-sage px-1 text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+                    {totalItemsCount}
+                  </span>
+                )}
+              </Link>
               {loggedIn ? (
                 <>
                   {/* Greeting — shows logged-in user's name from localStorage session */}
