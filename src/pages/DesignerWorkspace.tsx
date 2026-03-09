@@ -120,7 +120,7 @@ export default function DesignerWorkspace() {
             return;
         }
         return '';
-    });
+    };
 
     return (
         <div className="min-h-screen bg-cream flex flex-col h-screen overflow-hidden">
