@@ -1,9 +1,163 @@
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+    ArrowLeft, PenTool, Box as BoxIcon, SlidersHorizontal,
+    Move, RotateCw, X, Check, AlertCircle, LayoutTemplate
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Canvas, useThree } from '@react-three/fiber';
+import {
+    OrthographicCamera, PerspectiveCamera, OrbitControls,
+    Grid, Environment, TransformControls
+} from '@react-three/drei';
+import * as THREE from 'three';
+import { supabase } from '../utils/supabase';
+import { getUser } from '../utils/auth';
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+type FurnitureType = {
+    id: string;
+    type: string;
+    name: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+};
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, PenTool, Box, SlidersHorizontal } from 'lucide-react';
+type RoomConfig = {
+    id: string;
+    name: string;
+    width: number;
+    depth: number;
+    height: number;
+    wallColor: string;
+    floorColor: string;
+};
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+const ROOMS: RoomConfig[] = [
+    { id: 'living', name: 'Living Room', width: 10, depth: 8, height: 3, wallColor: '#f5f0ea', floorColor: '#d4c9b8' },
+    { id: 'bedroom', name: 'Bedroom', width: 8, depth: 6, height: 3, wallColor: '#ece7df', floorColor: '#c9bfb0' },
+    { id: 'kitchen', name: 'Kitchen', width: 8, depth: 8, height: 3, wallColor: '#f0ebe3', floorColor: '#bfb5a5' },
+    { id: 'office', name: 'Office', width: 7, depth: 6, height: 3, wallColor: '#eae5dd', floorColor: '#c4baa9' },
+];
+
+const CATALOG = [
+    { type: 'sofa', name: 'Sofa', color: '#8B7355', size: [2, 0.8, 1] as [number, number, number] },
+    { type: 'table', name: 'Table', color: '#A0522D', size: [1.2, 0.75, 0.8] as [number, number, number] },
+    { type: 'plant', name: 'Plant', color: '#6B8E23', size: [0.5, 1, 0.5] as [number, number, number] },
+    { type: 'bed', name: 'Bed', color: '#BC8F8F', size: [2, 0.6, 1.8] as [number, number, number] },
+    { type: 'shelf', name: 'Shelf', color: '#DEB887', size: [1, 1.8, 0.4] as [number, number, number] },
+    { type: 'chair', name: 'Chair', color: '#CD853F', size: [0.6, 0.9, 0.6] as [number, number, number] },
+];
+
+// ─── Helper: get catalog size by type ────────────────────────────────────────
+function getSizeForType(type: string): [number, number, number] {
+    return CATALOG.find(c => c.type === type)?.size ?? [1, 1, 1];
+}
+function getColorForType(type: string): string {
+    return CATALOG.find(c => c.type === type)?.color ?? '#999';
+}
+
+// ─── 3D Sub-Components ──────────────────────────────────────────────────────
+
+/** Renders the room walls and floor */
+function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () => void }) {
+    const { width, depth, height, wallColor, floorColor } = room;
+    const hw = width / 2;
+    const hd = depth / 2;
+
+    return (
+        <group>
+            {/* Floor */}
+            <mesh
+                receiveShadow
+                position={[0, 0, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                onClick={(e) => { e.stopPropagation(); onDeselect(); }}
+            >
+                <planeGeometry args={[width, depth]} />
+                <meshStandardMaterial color={floorColor} />
+            </mesh>
+
+            {/* Back wall */}
+            <mesh receiveShadow position={[0, height / 2, -hd]}>
+                <planeGeometry args={[width, height]} />
+                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
+            </mesh>
+
+            {/* Left wall */}
+            <mesh receiveShadow position={[-hw, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+                <planeGeometry args={[depth, height]} />
+                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
+            </mesh>
+
+            {/* Right wall */}
+            <mesh receiveShadow position={[hw, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
+                <planeGeometry args={[depth, height]} />
+                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
+            </mesh>
+        </group>
+    );
+}
+
+/** Renders a single furniture item with optional TransformControls */
+function Model({
+    item, isSelected, onSelect, transformMode, updateItem, setIsDragging
+}: {
+    item: FurnitureType;
+    isSelected: boolean;
+    onSelect: () => void;
+    transformMode: 'translate' | 'rotate';
+    updateItem: (id: string, updates: Partial<FurnitureType>) => void;
+    setIsDragging: (v: boolean) => void;
+}) {
+    const meshRef = useRef<THREE.Mesh>(null!);
+    const size = getSizeForType(item.type);
+    const color = getColorForType(item.type);
+
+    return (
+        <group>
+            <mesh
+                ref={meshRef}
+                castShadow
+                receiveShadow
+                position={item.position}
+                rotation={item.rotation}
+                onClick={(e) => { e.stopPropagation(); onSelect(); }}
+            >
+                <boxGeometry args={size} />
+                <meshStandardMaterial
+                    color={color}
+                    emissive={isSelected ? '#ffd700' : '#000000'}
+                    emissiveIntensity={isSelected ? 0.15 : 0}
+                />
+            </mesh>
+
+            {isSelected && meshRef.current && (
+                <TransformControls
+                    object={meshRef.current}
+                    mode={transformMode}
+                    onMouseDown={() => setIsDragging(true)}
+                    onMouseUp={() => {
+                        setIsDragging(false);
+                        if (meshRef.current) {
+                            updateItem(item.id, {
+                                position: meshRef.current.position.toArray() as [number, number, number],
+                                rotation: [
+                                    meshRef.current.rotation.x,
+                                    meshRef.current.rotation.y,
+                                    meshRef.current.rotation.z
+                                ],
+                            });
+                        }
+                    }}
+                />
+            )}
+        </group>
+    );
+}
+
+// ─── Main Page Component ─────────────────────────────────────────────────────
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -119,7 +273,46 @@ export default function DesignerWorkspace() {
             showToastMessage('Please sign in to save your designs.', 'error');
             return;
         }
-        return '';
+
+        setIsSaving(true);
+        try {
+            const payload = {
+                user_id: user.id,
+                name: designName || 'Untitled Room',
+                room_type: selectedRoomId,
+                furniture_layout: placedItems,
+            };
+
+            if (currentDesignId) {
+                // Update existing design
+                const { error } = await supabase
+                    .from('saved_designs')
+                    .update(payload)
+                    .eq('id', currentDesignId);
+
+                if (error) throw error;
+                showToastMessage('Design saved successfully!');
+            } else {
+                // Insert new design
+                const { data, error } = await supabase
+                    .from('saved_designs')
+                    .insert(payload)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                if (data) {
+                    setCurrentDesignId(data.id);
+                    setSearchParams({ designId: data.id });
+                }
+                showToastMessage('Design created successfully!');
+            }
+        } catch (err) {
+            console.error('Save failed:', err);
+            showToastMessage('Failed to save. Please try again.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -180,6 +373,23 @@ export default function DesignerWorkspace() {
                                 3D View
                             </button>
                         </div>
+
+                        {/* Save Button */}
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="bg-charcoal text-white px-6 py-2 text-[12px] uppercase tracking-wider hover:bg-charcoal/90 transition-colors disabled:opacity-50"
+                        >
+                            {isSaving ? 'Saving…' : 'Save'}
+                        </button>
+
+                        {/* New Design Button */}
+                        <button
+                            onClick={handleCreateNew}
+                            className="border border-stone-light px-6 py-2 text-[12px] uppercase tracking-wider text-charcoal/70 hover:text-charcoal hover:border-charcoal transition-colors"
+                        >
+                            New
+                        </button>
                     </div>
 
                     {/* Spacer to center the title */}
@@ -280,6 +490,18 @@ export default function DesignerWorkspace() {
                             ))}
                         </div>
                     </div>
+
+                    {/* Delete selected item */}
+                    {selectedId && (
+                        <div className="p-5 border-t border-stone-light">
+                            <button
+                                onClick={deleteSelected}
+                                className="w-full py-2 text-[12px] uppercase tracking-wider text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                                Delete Selected
+                            </button>
+                        </div>
+                    )}
                 </aside>
 
                 {/* Right Area: 3D Canvas */}
@@ -295,7 +517,7 @@ export default function DesignerWorkspace() {
                         <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
                         <Environment preset="city" />
 
-                        {/* We hide the grid in 3D to make realistic rooms look cleaner, but keep it in 2D for layout */}
+                        {/* Grid visible only in 2D mode for layout guidance */}
                         {viewMode === '2d' && (
                             <Grid
                                 position={[0, -0.01, 0]}
@@ -324,7 +546,7 @@ export default function DesignerWorkspace() {
                             />
                         ))}
 
-                        {/* Enable orbiting based on viewMode. makeDefault=true pauses orbit when using TransformControls */}
+                        {/* Orbit controls: disable rotation in 2D mode */}
                         {viewMode === '3d' ? (
                             <OrbitControls makeDefault enabled={!isDragging} minPolarAngle={0} maxPolarAngle={Math.PI / 2 - 0.05} />
                         ) : (
