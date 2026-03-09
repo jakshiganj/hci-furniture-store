@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ShoppingBag, Search, User, LogOut } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { isLoggedIn, logout, getUser } from '../utils/auth';
+import { Menu, X, ShoppingBag, Search, User, LogOut, Package } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
+import { useCart } from '../utils/cart';
 
 const navLinks = [
-  { name: 'Shop', href: '#shop' },
-  { name: 'Collections', href: '#collections' },
-  { name: 'About', href: '#about' },
-  { name: 'Journal', href: '#journal' },
+  { name: 'Shop', href: '/products', isRoute: true },
+  { name: 'Collections', href: '/#collections', isRoute: false, hash: 'collections' },
+  { name: 'About', href: '/about', isRoute: true },
+  { name: 'Journal', href: '/journal', isRoute: true },
 ];
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const loggedIn = isLoggedIn();
+  const adminLevel = isAdmin();
   // Retrieve the current user's data (name, email) from localStorage session
   const user = getUser();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { totalItemsCount } = useCart();
+  
+  const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/designer');
 
   const handleLogout = () => {
     logout();
@@ -45,35 +51,74 @@ export default function Navbar() {
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <a href="#top" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
+            <Link to="/" className="text-2xl tracking-[0.3em] font-serif text-charcoal">
               CeylonVista
-            </a>
+            </Link>
 
             {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-10">
-              {navLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.href}
-                  className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
-                >
-                  {link.name}
-                  <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
-                </a>
+            <div className="hidden lg:flex items-center gap-6 xl:gap-8">
+              {!isAdminPage && navLinks.map((link) => (
+                link.isRoute ? (
+                  <Link
+                    key={link.name}
+                    to={link.href}
+                    className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
+                  >
+                    {link.name}
+                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
+                  </Link>
+                ) : (
+                  <button
+                    key={link.name}
+                    onClick={() => {
+                      if (location.pathname !== '/') {
+                        navigate('/');
+                        setTimeout(() => {
+                          document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      } else {
+                        document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors duration-300 relative group"
+                  >
+                    {link.name}
+                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
+                  </button>
+                )
               ))}
+              {adminLevel && (
+                  <>
+                    <Link to="/designer" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                        Designer
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                    </Link>
+                    <Link to="/admin" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                        Admin
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                    </Link>
+                  </>
+              )}
             </div>
 
             {/* Icons */}
-            <div className="flex items-center gap-5">
-              <button className="hidden md:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
+            <div className="flex items-center gap-4 lg:gap-5">
+              <button className="hidden lg:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
                 <Search size={18} strokeWidth={1.5} />
               </button>
-              <button className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
+              {loggedIn && (
+                <Link to="/orders" className="text-charcoal/70 hover:text-charcoal transition-colors" aria-label="My Orders" title="My Orders">
+                  <Package size={18} strokeWidth={1.5} />
+                </Link>
+              )}
+              <Link to="/checkout" className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
                 <ShoppingBag size={18} strokeWidth={1.5} />
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-sage text-white text-[9px] rounded-full flex items-center justify-center font-medium">
-                  2
-                </span>
-              </button>
+                {totalItemsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-sage px-1 text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+                    {totalItemsCount}
+                  </span>
+                )}
+              </Link>
               {loggedIn ? (
                 <>
                   {/* Greeting — shows logged-in user's name from localStorage session */}
@@ -102,7 +147,7 @@ export default function Navbar() {
                 </Link>
               )}
               <button
-                className="md:hidden text-charcoal/70 hover:text-charcoal transition-colors"
+                className="lg:hidden text-charcoal/70 hover:text-charcoal transition-colors"
                 onClick={() => setIsMobileOpen(true)}
                 aria-label="Menu"
               >
@@ -129,19 +174,85 @@ export default function Navbar() {
               </button>
             </div>
             <div className="flex flex-col items-center justify-center flex-1 gap-8">
-              {navLinks.map((link, i) => (
-                <motion.a
-                  key={link.name}
-                  href={link.href}
+              {!isAdminPage && navLinks.map((link, i) => (
+                link.isRoute ? (
+                  <motion.div
+                    key={link.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                  >
+                    <Link
+                      to={link.href}
+                      className="text-3xl font-serif text-charcoal"
+                      onClick={() => setIsMobileOpen(false)}
+                    >
+                      {link.name}
+                    </Link>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key={link.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="text-3xl font-serif text-charcoal"
+                    onClick={() => {
+                      setIsMobileOpen(false);
+                      if (location.pathname !== '/') {
+                        navigate('/');
+                        setTimeout(() => {
+                          document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      } else {
+                        document.getElementById(link.hash!)?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                  >
+                    {link.name}
+                  </motion.button>
+                )
+              ))}
+              {loggedIn && (
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="text-3xl font-serif text-charcoal"
-                  onClick={() => setIsMobileOpen(false)}
+                  transition={{ delay: navLinks.length * 0.1 }}
                 >
-                  {link.name}
-                </motion.a>
-              ))}
+                  <Link
+                    to="/orders"
+                    className="text-3xl font-serif text-charcoal"
+                    onClick={() => setIsMobileOpen(false)}
+                  >
+                    My Orders
+                  </Link>
+                </motion.div>
+              )}
+              {adminLevel && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: navLinks.length * 0.1 }}
+                      className="mt-4 pt-4 border-t border-charcoal/10 w-32 text-center flex flex-col gap-6"
+                    >
+                        <Link 
+                            to="/designer" 
+                            className="text-2xl font-serif text-sage"
+                            onClick={() => setIsMobileOpen(false)}
+                        >
+                            Designer
+                        </Link>
+                        <Link 
+                            to="/admin" 
+                            className="text-2xl font-serif text-sage"
+                            onClick={() => setIsMobileOpen(false)}
+                        >
+                            Admin
+                        </Link>
+                    </motion.div>
+                  </>
+              )}
             </div>
           </motion.div>
         )}

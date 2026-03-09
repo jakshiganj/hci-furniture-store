@@ -15,24 +15,23 @@ export default function LoginPage() {
     // Track successful login to show animated success message before redirect
     const [success, setSuccess] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setSuccess('');
         setIsLoading(true);
 
-        setTimeout(() => {
-            const result = login(email, password);
-            if (result) {
-                // Show full-screen success overlay, then redirect after 2 seconds
-                setSuccess('Login successful...');
-                setIsLoading(false);
-                setTimeout(() => navigate('/'), 2000);
-            } else {
-                setError('Invalid email or password. Please try again.');
-                setIsLoading(false);
-            }
-        }, 600);
+        const result = await login(email, password);
+        
+        if (result) {
+            // Show full-screen success overlay, then redirect after 2 seconds
+            setSuccess('Login successful...');
+            setIsLoading(false);
+            setTimeout(() => navigate('/'), 2000);
+        } else {
+            setError('Invalid email or password. Please try again.');
+            setIsLoading(false);
+        }
     };
 
     return (
