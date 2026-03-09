@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight } from 'lucide-react';
 // Persistence: import CRUD functions to read and delete designs from localStorage
@@ -7,11 +7,7 @@ import { getDesigns, deleteDesign, type Design } from '../services/designService
 export default function SavedDesigns() {
     const navigate = useNavigate();
     // Persistence: load saved designs from localStorage on mount
-    const [designs, setDesigns] = useState<Design[]>([]);
-
-    useEffect(() => {
-        setDesigns(getDesigns());
-    }, []);
+    const [designs, setDesigns] = useState<Design[]>(() => getDesigns());
 
     // Persistence: open a saved design by storing its ID and navigating to /designer
     const handleOpen = (id: string) => {
