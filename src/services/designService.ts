@@ -42,3 +42,20 @@ export const saveDesign = (
 
     return newDesign;
 };
+
+// Get all saved designs from localStorage
+export const getDesigns = (): Design[] => {
+    return readFromStorage();
+};
+
+// Find a single design by its ID
+export const getDesignById = (id: string): Design | undefined => {
+    const designs = readFromStorage();
+    return designs.find((d) => d.id === id);
+};
+
+// Delete a design by ID and update localStorage
+export const deleteDesign = (id: string): void => {
+    const designs = readFromStorage();
+    writeToStorage(designs.filter((d) => d.id !== id));
+};

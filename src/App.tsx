@@ -7,6 +7,8 @@ import Features from './components/Features'
 import ProductGrid from './components/ProductGrid'
 import Collections from './components/Collections'
 import CreateDesign from './components/CreateDesign'
+// Persistence: display saved designs on the home page
+import SavedDesigns from './components/SavedDesigns'
 import Testimonials from './components/Testimonials'
 import Newsletter from './components/Newsletter'
 import Footer from './components/Footer'
@@ -23,6 +25,8 @@ function HomePage() {
       <Marquee />
       <Features />
       <CreateDesign />
+      {/* Persistence: show saved designs below the create section */}
+      <SavedDesigns />
       <ProductGrid />
       <Collections />
       <Testimonials />

@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, PenTool, Box, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, PenTool, Box, SlidersHorizontal, Save } from 'lucide-react';
+// Persistence: import saveDesign to store the current design in localStorage
+import { saveDesign } from '../services/designService';
 
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
@@ -12,6 +14,16 @@ export default function DesignerWorkspace() {
         }
         return '';
     });
+
+    // Track save-confirmation state for the Save Design button
+    const [saved, setSaved] = useState(false);
+
+    // Persistence: save the current workspace state to localStorage
+    const handleSave = () => {
+        saveDesign({ name: 'My Room Design', roomType, furniture: [] });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+    };
 
     return (
         <div className="min-h-screen bg-cream">
@@ -38,8 +50,20 @@ export default function DesignerWorkspace() {
                         )}
                     </div>
 
-                    {/* Spacer to center the title */}
-                    <div className="w-[110px]" />
+                    {/* Save Design button — persists the current design to localStorage */}
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saved}
+                        className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 cursor-pointer
+                            ${saved
+                                ? 'bg-sage/20 text-sage-dark'
+                                : 'bg-sage text-warm-white hover:bg-sage-dark'
+                            }`}
+                    >
+                        <Save size={15} strokeWidth={1.5} />
+                        {saved ? 'Saved ✓' : 'Save Design'}
+                    </button>
                 </div>
             </header>
 
