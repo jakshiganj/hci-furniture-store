@@ -13,6 +13,7 @@ import {
 import * as THREE from 'three';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
+import { saveDesign as saveToLocal, updateDesign as updateLocal, getDesignById as getLocalDesign } from '../services/designService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FurnitureType = {
@@ -155,6 +156,8 @@ export default function DesignerWorkspace() {
     const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
     const [newDesignName, setNewDesignName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
+    const [isSaveNameModalOpen, setIsSaveNameModalOpen] = useState(false);
+    const [saveNameInput, setSaveNameInput] = useState('');
 
     const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
@@ -164,21 +167,29 @@ export default function DesignerWorkspace() {
     const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
     const selectedItem = placedItems.find(i => i.id === selectedId);
 
-    // --- Backend Sync ---
+    // --- Load Design (Supabase with localStorage fallback) ---
     useEffect(() => {
-        const loadDesigns = async () => {
+        if (!designIdFromUrl) return;
+
+        // Try localStorage first (always available)
+        const localDesign = getLocalDesign(designIdFromUrl);
+        if (localDesign) {
+            setCurrentDesignId(localDesign.id);
+            setDesignName(localDesign.name || 'Untitled Room');
+            setSelectedRoomId(localDesign.roomType || ROOMS[0].id);
+            setPlacedItems((localDesign.furniture as FurnitureType[]) || []);
+            return;
+        }
+
+        // Fallback: try Supabase
+        const loadFromSupabase = async () => {
             const user = getUser();
             if (!user?.id) return;
 
-            let query = supabase.from('saved_designs').select('*');
-
-            if (designIdFromUrl) {
-                query = query.eq('id', designIdFromUrl);
-            } else {
-                query = query.eq('user_id', user.id).order('created_at', { ascending: false }).limit(1);
-            }
-
-            const { data, error } = await query;
+            const { data, error } = await supabase
+                .from('saved_designs')
+                .select('*')
+                .eq('id', designIdFromUrl);
 
             if (data && data.length > 0 && !error) {
                 const design = data[0];
@@ -188,7 +199,7 @@ export default function DesignerWorkspace() {
                 setPlacedItems(design.furniture_layout || []);
             }
         };
-        loadDesigns();
+        loadFromSupabase();
     }, [designIdFromUrl]);
 
     // Handlers
@@ -239,28 +250,65 @@ export default function DesignerWorkspace() {
             return;
         }
 
+        // First save with no name yet → prompt for a name
+        if (!currentDesignId && !designName.trim()) {
+            setSaveNameInput('');
+            setIsSaveNameModalOpen(true);
+            return;
+        }
+
+        await executeSave(designName);
+    };
+
+    // Confirm name from the save-name modal and persist
+    const confirmSaveWithName = async () => {
+        const name = saveNameInput.trim() || `Room Design - ${new Date().toLocaleDateString()}`;
+        setDesignName(name);
+        setIsSaveNameModalOpen(false);
+        await executeSave(name);
+    };
+
+    // Shared save logic (Supabase + localStorage for reliability)
+    const executeSave = async (name: string) => {
+        const safeName = name || 'Untitled Room';
+
         setIsSaving(true);
         try {
-            const payload = {
-                user_id: user.id,
-                name: designName || 'Untitled Room',
-                room_type: selectedRoomId,
-                furniture_layout: placedItems,
-            };
-
+            // Always save to localStorage (reliable, instant)
             if (currentDesignId) {
-                const { error } = await supabase.from('saved_designs').update(payload).eq('id', currentDesignId);
-                if (error) throw error;
-                showToastMessage('Design saved successfully!');
+                updateLocal(currentDesignId, {
+                    name: safeName,
+                    roomType: selectedRoomId,
+                    furniture: placedItems,
+                });
             } else {
-                const { data, error } = await supabase.from('saved_designs').insert(payload).select().single();
-                if (error) throw error;
-                if (data) {
-                    setCurrentDesignId(data.id);
-                    setSearchParams({ designId: data.id });
-                }
-                showToastMessage('Design created successfully!');
+                const saved = saveToLocal({
+                    name: safeName,
+                    roomType: selectedRoomId,
+                    furniture: placedItems,
+                });
+                setCurrentDesignId(saved.id);
+                setSearchParams({ designId: saved.id });
             }
+
+            // Also try Supabase (best-effort, won't block the UI)
+            const user = getUser();
+            if (user?.id) {
+                const supaPayload = {
+                    user_id: user.id,
+                    name: safeName,
+                    room_type: selectedRoomId,
+                    furniture_layout: placedItems,
+                };
+
+                if (currentDesignId) {
+                    supabase.from('saved_designs').update(supaPayload).eq('id', currentDesignId).then(() => { });
+                } else {
+                    supabase.from('saved_designs').insert(supaPayload).then(() => { });
+                }
+            }
+
+            showToastMessage('Design saved successfully!');
         } catch (err) {
             console.error('Save failed:', err);
             showToastMessage('Failed to save. Please try again.', 'error');
@@ -327,8 +375,8 @@ export default function DesignerWorkspace() {
                         <button
                             onClick={() => setViewMode('2d')}
                             className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '2d'
-                                    ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
-                                    : 'text-charcoal/45 hover:text-charcoal border border-transparent'
+                                ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
+                                : 'text-charcoal/45 hover:text-charcoal border border-transparent'
                                 }`}
                         >
                             <LayoutTemplate size={14} strokeWidth={1.5} />
@@ -337,8 +385,8 @@ export default function DesignerWorkspace() {
                         <button
                             onClick={() => setViewMode('3d')}
                             className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '3d'
-                                    ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
-                                    : 'text-charcoal/45 hover:text-charcoal border border-transparent'
+                                ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
+                                : 'text-charcoal/45 hover:text-charcoal border border-transparent'
                                 }`}
                         >
                             <BoxIcon size={14} strokeWidth={1.5} />
@@ -433,6 +481,75 @@ export default function DesignerWorkspace() {
                                     >
                                         <Plus size={14} strokeWidth={2} />
                                         Create Design
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Save Name Modal (first-time save) ─── */}
+            <AnimatePresence>
+                {isSaveNameModalOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
+                        >
+                            <button
+                                onClick={() => setIsSaveNameModalOpen(false)}
+                                className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"
+                            >
+                                <X size={18} strokeWidth={1.5} />
+                            </button>
+
+                            <div className="mb-8">
+                                <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Save Your Work</p>
+                                <h3 className="text-3xl font-serif text-charcoal">
+                                    Name Your <span className="italic">Design</span>
+                                </h3>
+                            </div>
+
+                            <form onSubmit={(e) => { e.preventDefault(); confirmSaveWithName(); }}>
+                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">
+                                    Design Name
+                                </label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={saveNameInput}
+                                    onChange={(e) => setSaveNameInput(e.target.value)}
+                                    placeholder="e.g. My Living Room"
+                                    className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
+                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
+                                />
+
+                                <div className="flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSaveNameModalOpen(false)}
+                                        className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                                   text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                                   hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md
+                                                   inline-flex items-center gap-2"
+                                    >
+                                        <Save size={14} strokeWidth={1.5} />
+                                        Save Design
                                     </button>
                                 </div>
                             </form>
