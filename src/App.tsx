@@ -62,24 +62,24 @@ function App() {
         <Route path="/journal" element={<JournalPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
-        
+
         {/* Protected Customer Routes */}
         <Route path="/orders" element={
           <ProtectedRoute>
             <PastOrders />
           </ProtectedRoute>
         } />
-        
-        {/* Protected Admin Routes */}
+
+        {/* Protected Customer Routes: Designer */}
         <Route path="/designer" element={
-          <ProtectedRoute requireAdmin={true}>
+          <ProtectedRoute>
             <DesignerWorkspace />
           </ProtectedRoute>
         } />
         <Route path="/admin" element={
-            <ProtectedRoute requireAdmin={true}>
-              <AdminDashboard />
-            </ProtectedRoute>
+          <ProtectedRoute requireAdmin={true}>
+            <AdminDashboard />
+          </ProtectedRoute>
         } />
       </Routes>
     </div>

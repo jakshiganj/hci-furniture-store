@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    ArrowLeft, PenTool, Box as BoxIcon, SlidersHorizontal,
-    Move, RotateCw, X, Check, AlertCircle, LayoutTemplate
+    ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
+    AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import {
     OrthographicCamera, PerspectiveCamera, OrbitControls,
     Grid, Environment, TransformControls
@@ -50,7 +50,6 @@ const CATALOG = [
     { type: 'chair', name: 'Chair', color: '#CD853F', size: [0.6, 0.9, 0.6] as [number, number, number] },
 ];
 
-// ─── Helper: get catalog size by type ────────────────────────────────────────
 function getSizeForType(type: string): [number, number, number] {
     return CATALOG.find(c => c.type === type)?.size ?? [1, 1, 1];
 }
@@ -60,7 +59,6 @@ function getColorForType(type: string): string {
 
 // ─── 3D Sub-Components ──────────────────────────────────────────────────────
 
-/** Renders the room walls and floor */
 function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () => void }) {
     const { width, depth, height, wallColor, floorColor } = room;
     const hw = width / 2;
@@ -68,30 +66,19 @@ function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () =
 
     return (
         <group>
-            {/* Floor */}
-            <mesh
-                receiveShadow
-                position={[0, 0, 0]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                onClick={(e) => { e.stopPropagation(); onDeselect(); }}
-            >
+            <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}
+                onClick={(e) => { e.stopPropagation(); onDeselect(); }}>
                 <planeGeometry args={[width, depth]} />
                 <meshStandardMaterial color={floorColor} />
             </mesh>
-
-            {/* Back wall */}
             <mesh receiveShadow position={[0, height / 2, -hd]}>
                 <planeGeometry args={[width, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
             </mesh>
-
-            {/* Left wall */}
             <mesh receiveShadow position={[-hw, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
                 <planeGeometry args={[depth, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
             </mesh>
-
-            {/* Right wall */}
             <mesh receiveShadow position={[hw, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
                 <planeGeometry args={[depth, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
@@ -100,7 +87,6 @@ function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () =
     );
 }
 
-/** Renders a single furniture item with optional TransformControls */
 function Model({
     item, isSelected, onSelect, transformMode, updateItem, setIsDragging
 }: {
@@ -118,11 +104,8 @@ function Model({
     return (
         <group>
             <mesh
-                ref={meshRef}
-                castShadow
-                receiveShadow
-                position={item.position}
-                rotation={item.rotation}
+                ref={meshRef} castShadow receiveShadow
+                position={item.position} rotation={item.rotation}
                 onClick={(e) => { e.stopPropagation(); onSelect(); }}
             >
                 <boxGeometry args={size} />
@@ -132,7 +115,6 @@ function Model({
                     emissiveIntensity={isSelected ? 0.15 : 0}
                 />
             </mesh>
-
             {isSelected && meshRef.current && (
                 <TransformControls
                     object={meshRef.current}
@@ -143,11 +125,7 @@ function Model({
                         if (meshRef.current) {
                             updateItem(item.id, {
                                 position: meshRef.current.position.toArray() as [number, number, number],
-                                rotation: [
-                                    meshRef.current.rotation.x,
-                                    meshRef.current.rotation.y,
-                                    meshRef.current.rotation.z
-                                ],
+                                rotation: [meshRef.current.rotation.x, meshRef.current.rotation.y, meshRef.current.rotation.z],
                             });
                         }
                     }}
@@ -163,7 +141,6 @@ export default function DesignerWorkspace() {
     const [searchParams, setSearchParams] = useSearchParams();
     const designIdFromUrl = searchParams.get('designId');
 
-    // State
     const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
     const [placedItems, setPlacedItems] = useState<FurnitureType[]>([]);
@@ -171,9 +148,8 @@ export default function DesignerWorkspace() {
     const [isDragging, setIsDragging] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<string>(ROOMS[0].id);
     const [isSaving, setIsSaving] = useState(false);
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-    // Design identity
     const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
     const [designName, setDesignName] = useState('');
     const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
@@ -186,6 +162,7 @@ export default function DesignerWorkspace() {
     };
 
     const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
+    const selectedItem = placedItems.find(i => i.id === selectedId);
 
     // --- Backend Sync ---
     useEffect(() => {
@@ -193,19 +170,12 @@ export default function DesignerWorkspace() {
             const user = getUser();
             if (!user?.id) return;
 
-            let query = supabase
-                .from('saved_designs')
-                .select('*');
+            let query = supabase.from('saved_designs').select('*');
 
             if (designIdFromUrl) {
-                // Load a specific design by ID
                 query = query.eq('id', designIdFromUrl);
             } else {
-                // Fall back to most recent design by this user
-                query = query
-                    .eq('user_id', user.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
+                query = query.eq('user_id', user.id).order('created_at', { ascending: false }).limit(1);
             }
 
             const { data, error } = await query;
@@ -227,7 +197,6 @@ export default function DesignerWorkspace() {
             id: Math.random().toString(36).substr(2, 9),
             type: catalogItem.type,
             name: catalogItem.name,
-            // Spawn slightly offset so they don't perfectly overlap if clicked twice
             position: [placedItems.length * 0.5, 0, 0],
             rotation: [0, 0, 0],
         };
@@ -236,9 +205,7 @@ export default function DesignerWorkspace() {
     };
 
     const updateItem = (id: string, updates: Partial<FurnitureType>) => {
-        setPlacedItems((prev) =>
-            prev.map(item => item.id === id ? { ...item, ...updates } : item)
-        );
+        setPlacedItems((prev) => prev.map(item => item.id === id ? { ...item, ...updates } : item));
     };
 
     const deleteSelected = () => {
@@ -248,7 +215,6 @@ export default function DesignerWorkspace() {
         }
     };
 
-    // --- Create New Design ---
     const handleCreateNew = () => {
         setNewDesignName('');
         setIsNewDesignModalOpen(true);
@@ -266,7 +232,6 @@ export default function DesignerWorkspace() {
         showToastMessage(`New design "${name}" created`);
     };
 
-    // --- Save (Insert or Update) ---
     const handleSave = async () => {
         const user = getUser();
         if (!user?.id) {
@@ -284,22 +249,11 @@ export default function DesignerWorkspace() {
             };
 
             if (currentDesignId) {
-                // Update existing design
-                const { error } = await supabase
-                    .from('saved_designs')
-                    .update(payload)
-                    .eq('id', currentDesignId);
-
+                const { error } = await supabase.from('saved_designs').update(payload).eq('id', currentDesignId);
                 if (error) throw error;
                 showToastMessage('Design saved successfully!');
             } else {
-                // Insert new design
-                const { data, error } = await supabase
-                    .from('saved_designs')
-                    .insert(payload)
-                    .select()
-                    .single();
-
+                const { data, error } = await supabase.from('saved_designs').insert(payload).select().single();
                 if (error) throw error;
                 if (data) {
                     setCurrentDesignId(data.id);
@@ -317,20 +271,30 @@ export default function DesignerWorkspace() {
 
     return (
         <div className="min-h-screen bg-cream flex flex-col h-screen overflow-hidden">
-            {/* Top Bar */}
-            <header className="border-b border-stone-light bg-warm-white flex-shrink-0">
-                <div className="mx-auto px-6 py-3 flex items-center justify-between">
+
+            {/* ─── Top Header Bar ─── */}
+            <motion.header
+                initial={{ y: -60, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                className="border-b border-stone-light bg-warm-white/90 backdrop-blur-lg flex-shrink-0 z-20"
+            >
+                <div className="mx-auto px-6 lg:px-8 py-3.5 flex items-center justify-between">
+
+                    {/* Left: Back + Design Name */}
                     <div className="flex items-center gap-5">
                         <button
                             type="button"
                             onClick={() => navigate('/')}
-                            className="inline-flex items-center gap-2 text-sm text-charcoal/60 hover:text-charcoal transition-colors duration-300 cursor-pointer"
+                            className="group inline-flex items-center gap-2 text-[12px] tracking-[0.12em] uppercase text-charcoal/50 hover:text-charcoal transition-colors duration-300"
                         >
-                            <ArrowLeft size={16} strokeWidth={1.5} />
+                            <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
                             Back
                         </button>
-                        {/* Design Name (editable inline) */}
-                        <div className="border-l border-stone-light pl-5">
+
+                        <div className="w-px h-7 bg-stone-light" />
+
+                        <div>
                             {isEditingName ? (
                                 <input
                                     autoFocus
@@ -338,174 +302,284 @@ export default function DesignerWorkspace() {
                                     onChange={(e) => setDesignName(e.target.value)}
                                     onBlur={() => setIsEditingName(false)}
                                     onKeyDown={(e) => { if (e.key === 'Enter') setIsEditingName(false); }}
-                                    className="font-serif text-lg text-charcoal bg-transparent border-b-2 border-sage outline-none py-0.5 px-1 -ml-1 min-w-[180px]"
+                                    className="font-serif text-xl text-charcoal bg-transparent border-b-2 border-sage outline-none py-0.5 px-1 -ml-1 min-w-[200px]"
                                 />
                             ) : (
                                 <button
                                     onClick={() => setIsEditingName(true)}
-                                    className="font-serif text-lg text-charcoal hover:text-sage-dark transition-colors cursor-text flex items-center gap-2 group"
+                                    className="font-serif text-xl text-charcoal hover:text-sage-dark transition-colors duration-300 cursor-text flex items-center gap-2.5 group"
                                     title="Click to rename"
                                 >
                                     {designName || 'Untitled Room'}
-                                    <span className="text-[10px] text-charcoal/30 group-hover:text-sage uppercase tracking-wider">edit</span>
+                                    <span className="text-[9px] text-charcoal/20 group-hover:text-sage font-sans uppercase tracking-[0.15em] transition-colors duration-300">
+                                        rename
+                                    </span>
                                 </button>
                             )}
-                            <p className="text-[10px] text-charcoal/40 uppercase tracking-wider mt-0.5">
-                                {currentDesignId ? 'Saved' : 'Unsaved draft'}
+                            <p className="text-[10px] text-charcoal/35 uppercase tracking-[0.2em] mt-0.5 font-medium">
+                                {currentDesignId ? '● Saved' : '○ Unsaved draft'}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center bg-stone-light/40 p-1 rounded-md">
-                            <button
-                                onClick={() => setViewMode('2d')}
-                                className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-colors ${viewMode === '2d' ? 'bg-white shadow-sm text-charcoal' : 'text-charcoal/60 hover:text-charcoal'}`}
-                            >
-                                <LayoutTemplate size={16} />
-                                2D View
-                            </button>
-                            <button
-                                onClick={() => setViewMode('3d')}
-                                className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-colors ${viewMode === '3d' ? 'bg-white shadow-sm text-charcoal' : 'text-charcoal/60 hover:text-charcoal'}`}
-                            >
-                                <BoxIcon size={16} />
-                                3D View
-                            </button>
-                        </div>
-
-                        {/* Save Button */}
+                    {/* Center: View Toggle */}
+                    <div className="flex items-center bg-stone-light/30 border border-stone-light/60 p-1 rounded-lg">
                         <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="bg-charcoal text-white px-6 py-2 text-[12px] uppercase tracking-wider hover:bg-charcoal/90 transition-colors disabled:opacity-50"
+                            onClick={() => setViewMode('2d')}
+                            className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '2d'
+                                    ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
+                                    : 'text-charcoal/45 hover:text-charcoal border border-transparent'
+                                }`}
                         >
-                            {isSaving ? 'Saving…' : 'Save'}
+                            <LayoutTemplate size={14} strokeWidth={1.5} />
+                            2D Plan
                         </button>
-
-                        {/* New Design Button */}
                         <button
-                            onClick={handleCreateNew}
-                            className="border border-stone-light px-6 py-2 text-[12px] uppercase tracking-wider text-charcoal/70 hover:text-charcoal hover:border-charcoal transition-colors"
+                            onClick={() => setViewMode('3d')}
+                            className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '3d'
+                                    ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
+                                    : 'text-charcoal/45 hover:text-charcoal border border-transparent'
+                                }`}
                         >
-                            New
+                            <BoxIcon size={14} strokeWidth={1.5} />
+                            3D View
                         </button>
                     </div>
 
-                    {/* Spacer to center the title */}
-                    <div className="w-[110px]" />
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleCreateNew}
+                            className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20
+                                       transition-all duration-300"
+                        >
+                            <FilePlus size={14} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-300" />
+                            New
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="group inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                       bg-charcoal text-white hover:bg-charcoal-light
+                                       disabled:opacity-40 disabled:cursor-not-allowed
+                                       transition-all duration-300 shadow-sm hover:shadow-md"
+                        >
+                            <Save size={14} strokeWidth={1.5} className={isSaving ? 'animate-pulse' : 'group-hover:scale-110 transition-transform duration-300'} />
+                            {isSaving ? 'Saving…' : 'Save Design'}
+                        </button>
+                    </div>
                 </div>
-            </header>
+            </motion.header>
 
-            {/* New Design Modal */}
+            {/* ─── New Design Modal ─── */}
             <AnimatePresence>
                 {isNewDesignModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm"
+                    >
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 0.2 }}
-                            className="bg-white w-full max-w-md p-8 shadow-2xl relative"
+                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
                         >
                             <button
                                 onClick={() => setIsNewDesignModalOpen(false)}
-                                className="absolute top-6 right-6 text-charcoal/50 hover:text-charcoal transition-colors"
+                                className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"
                             >
-                                <X size={20} />
+                                <X size={18} strokeWidth={1.5} />
                             </button>
 
-                            <h3 className="text-2xl font-serif text-charcoal mb-2">New Design</h3>
-                            <p className="text-[13px] text-charcoal/50 mb-6">Give your room design a name to get started.</p>
+                            <div className="mb-8">
+                                <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Start Fresh</p>
+                                <h3 className="text-3xl font-serif text-charcoal">
+                                    New <span className="italic">Design</span>
+                                </h3>
+                            </div>
 
                             <form onSubmit={(e) => { e.preventDefault(); confirmCreateNew(); }}>
-                                <label className="block text-[11px] uppercase tracking-wider text-charcoal/60 mb-2">Design Name</label>
+                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">
+                                    Design Name
+                                </label>
                                 <input
                                     type="text"
                                     autoFocus
                                     value={newDesignName}
                                     onChange={(e) => setNewDesignName(e.target.value)}
                                     placeholder="e.g. My Living Room"
-                                    className="w-full border border-stone-light bg-warm-white px-4 py-3 text-sm focus:outline-none focus:border-sage transition-colors mb-6"
+                                    className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
+                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
                                 />
 
-                                <div className="flex justify-end gap-4">
+                                <div className="flex justify-end gap-3">
                                     <button
                                         type="button"
                                         onClick={() => setIsNewDesignModalOpen(false)}
-                                        className="px-6 py-3 text-[12px] uppercase tracking-wider text-charcoal/70 hover:text-charcoal"
+                                        className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                                   text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
-                                        className="bg-charcoal text-white px-8 py-3 text-[12px] uppercase tracking-wider hover:bg-charcoal/90 transition-colors"
+                                        className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                                   hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md
+                                                   inline-flex items-center gap-2"
                                     >
+                                        <Plus size={14} strokeWidth={2} />
                                         Create Design
                                     </button>
                                 </div>
                             </form>
                         </motion.div>
-                    </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Main Area */}
+            {/* ─── Main Content ─── */}
             <main className="flex-1 flex overflow-hidden">
-                {/* Left Sidebar: Tools & Catalog */}
-                <aside className="w-64 border-r border-stone-light bg-warm-white flex flex-col pb-4 h-full z-10 shadow-sm relative">
-                    <div className="p-5 border-b border-stone-light">
-                        <h2 className="font-serif text-lg text-charcoal mb-4">Toolbar</h2>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setTransformMode('translate')}
-                                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${transformMode === 'translate' ? 'border-sage bg-sage/10 text-sage-dark' : 'border-stone-light text-charcoal/60 hover:bg-stone-light/30'}`}
-                            >
-                                <Move size={20} className="mb-1" />
-                                <span className="text-xs font-medium">Move</span>
-                            </button>
-                            <button
-                                onClick={() => setTransformMode('rotate')}
-                                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${transformMode === 'rotate' ? 'border-sage bg-sage/10 text-sage-dark' : 'border-stone-light text-charcoal/60 hover:bg-stone-light/30'}`}
-                            >
-                                <RotateCw size={20} className="mb-1" />
-                                <span className="text-xs font-medium">Rotate</span>
-                            </button>
-                        </div>
-                    </div>
 
-                    <div className="p-5 flex-1 overflow-y-auto scrollbar-none">
-                        <h2 className="font-serif text-lg text-charcoal mb-4">Catalog</h2>
-                        <p className="text-xs text-charcoal/50 mb-4 tracking-wide uppercase">Click to add</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            {CATALOG.map((item) => (
+                {/* ─── Left Sidebar ─── */}
+                <motion.aside
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                    className="w-72 border-r border-stone-light bg-warm-white/80 backdrop-blur-sm flex flex-col h-full z-10 shadow-sm"
+                >
+                    {/* ─ Room Selector ─ */}
+                    <div className="p-5 border-b border-stone-light/70">
+                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Room Type</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {ROOMS.map((room) => (
                                 <button
-                                    key={item.name}
-                                    onClick={() => addItem(item)}
-                                    className="aspect-square flex flex-col items-center justify-center bg-stone-light/30 border border-stone-light/50 rounded-xl hover:border-sage hover:bg-sage/5 transition-all group"
+                                    key={room.id}
+                                    onClick={() => setSelectedRoomId(room.id)}
+                                    className={`px-3 py-2 rounded-lg text-[11px] tracking-wide font-medium transition-all duration-300
+                                        ${selectedRoomId === room.id
+                                            ? 'bg-sage/15 text-sage-dark border border-sage/30'
+                                            : 'text-charcoal/50 border border-transparent hover:bg-stone-light/40 hover:text-charcoal/70'
+                                        }`}
                                 >
-                                    <div className="w-8 h-8 rounded-sm mb-2 shadow-inner" style={{ backgroundColor: item.color }} />
-                                    <span className="text-xs font-medium text-charcoal/80 group-hover:text-charcoal">{item.name}</span>
+                                    {room.name}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Delete selected item */}
-                    {selectedId && (
-                        <div className="p-5 border-t border-stone-light">
+                    {/* ─ Tools ─ */}
+                    <div className="p-5 border-b border-stone-light/70">
+                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Transform</p>
+                        <div className="flex gap-2">
                             <button
-                                onClick={deleteSelected}
-                                className="w-full py-2 text-[12px] uppercase tracking-wider text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                                onClick={() => setTransformMode('translate')}
+                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300 group
+                                    ${transformMode === 'translate'
+                                        ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
+                                        : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
+                                    }`}
                             >
-                                Delete Selected
+                                <Move size={18} strokeWidth={1.5} className="mb-1.5" />
+                                <span className="text-[10px] tracking-wide font-medium uppercase">Move</span>
+                            </button>
+                            <button
+                                onClick={() => setTransformMode('rotate')}
+                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300 group
+                                    ${transformMode === 'rotate'
+                                        ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
+                                        : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
+                                    }`}
+                            >
+                                <RotateCw size={18} strokeWidth={1.5} className="mb-1.5" />
+                                <span className="text-[10px] tracking-wide font-medium uppercase">Rotate</span>
                             </button>
                         </div>
-                    )}
-                </aside>
+                    </div>
 
-                {/* Right Area: 3D Canvas */}
-                <section className="flex-1 relative cursor-crosshair bg-stone-light/20">
+                    {/* ─ Catalog ─ */}
+                    <div className="p-5 flex-1 overflow-y-auto scrollbar-none">
+                        <div className="flex items-center justify-between mb-4">
+                            <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Furniture</p>
+                            <div className="flex items-center gap-1.5 text-[9px] tracking-wider uppercase text-charcoal/25">
+                                <Armchair size={10} strokeWidth={1.5} />
+                                {CATALOG.length} items
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {CATALOG.map((item) => (
+                                <motion.button
+                                    key={item.name}
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={() => addItem(item)}
+                                    className="aspect-square flex flex-col items-center justify-center
+                                               bg-cream/60 border border-stone-light/50 rounded-xl
+                                               hover:border-sage/40 hover:bg-sage/5
+                                               transition-colors duration-300 group cursor-pointer"
+                                >
+                                    <div
+                                        className="w-9 h-9 rounded-lg mb-2.5 shadow-sm group-hover:shadow-md transition-shadow duration-300 border border-black/5"
+                                        style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="text-[10px] font-medium text-charcoal/55 group-hover:text-charcoal/80 tracking-wide transition-colors duration-300">
+                                        {item.name}
+                                    </span>
+                                </motion.button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* ─ Selected Item Actions ─ */}
+                    <AnimatePresence>
+                        {selectedItem && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="border-t border-stone-light/70 overflow-hidden"
+                            >
+                                <div className="p-5">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Selected</p>
+                                        <span className="text-[11px] font-serif text-charcoal/70">{selectedItem.name}</span>
+                                    </div>
+                                    <button
+                                        onClick={deleteSelected}
+                                        className="w-full py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium
+                                                   text-red-400 border border-red-200/60 bg-red-50/30
+                                                   hover:bg-red-50 hover:text-red-500 hover:border-red-300
+                                                   transition-all duration-300 flex items-center justify-center gap-2"
+                                    >
+                                        <Trash2 size={13} strokeWidth={1.5} />
+                                        Delete Item
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.aside>
+
+                {/* ─── 3D Canvas ─── */}
+                <section className="flex-1 relative bg-stone-light/15">
+                    {/* Item Count Badge */}
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="absolute top-4 left-4 z-10 bg-warm-white/80 backdrop-blur-sm border border-stone-light/50 rounded-lg px-4 py-2
+                                   flex items-center gap-2.5 shadow-sm"
+                    >
+                        <Armchair size={14} strokeWidth={1.5} className="text-charcoal/40" />
+                        <span className="text-[10px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">
+                            {placedItems.length} {placedItems.length === 1 ? 'item' : 'items'} · {activeRoom.name}
+                        </span>
+                    </motion.div>
+
                     <Canvas shadows>
                         {viewMode === '2d' ? (
                             <OrthographicCamera makeDefault position={[0, 10, 0]} zoom={60} near={0.1} far={100} rotation={[-Math.PI / 2, 0, 0]} />
@@ -517,7 +591,6 @@ export default function DesignerWorkspace() {
                         <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
                         <Environment preset="city" />
 
-                        {/* Grid visible only in 2D mode for layout guidance */}
                         {viewMode === '2d' && (
                             <Grid
                                 position={[0, -0.01, 0]}
@@ -546,7 +619,6 @@ export default function DesignerWorkspace() {
                             />
                         ))}
 
-                        {/* Orbit controls: disable rotation in 2D mode */}
                         {viewMode === '3d' ? (
                             <OrbitControls makeDefault enabled={!isDragging} minPolarAngle={0} maxPolarAngle={Math.PI / 2 - 0.05} />
                         ) : (
@@ -556,20 +628,24 @@ export default function DesignerWorkspace() {
                 </section>
             </main>
 
-            {/* Success/Error Toast */}
+            {/* ─── Toast Notification ─── */}
             <AnimatePresence>
                 {toast && (
                     <motion.div
-                        initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                        initial={{ opacity: 0, y: 40, scale: 0.92 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                        className="fixed bottom-8 right-8 bg-charcoal text-white px-6 py-4 shadow-xl flex items-center gap-3 z-50 pointer-events-none"
+                        exit={{ opacity: 0, y: 20, scale: 0.92 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none
+                                   border border-white/5"
                     >
-                        <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-500'}`}>
-                            {toast.type === 'success' ? <Check size={14} strokeWidth={3} /> : <AlertCircle size={14} strokeWidth={3} />}
+                        <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
+                            {toast.type === 'success'
+                                ? <Check size={12} strokeWidth={3} />
+                                : <AlertCircle size={12} strokeWidth={3} />
+                            }
                         </div>
-                        <span className="text-sm tracking-wide">{toast.message}</span>
+                        <span className="text-[12px] tracking-wide font-medium">{toast.message}</span>
                     </motion.div>
                 )}
             </AnimatePresence>
