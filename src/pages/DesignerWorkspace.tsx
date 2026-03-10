@@ -11,9 +11,15 @@ import {
     Grid, Environment, TransformControls
 } from '@react-three/drei';
 import * as THREE from 'three';
+import { Suspense } from 'react';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
 import { saveDesign as saveToLocal, updateDesign as updateLocal, getDesignById as getLocalDesign } from '../services/designService';
+import ChairModel from '../components/models/ChairModel';
+import TableModel from '../components/models/TableModel';
+import SofaModel from '../components/models/SofaModel';
+import BedModel from '../components/models/BedModel';
+import PlantModel from '../components/models/PlantModel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FurnitureType = {
@@ -58,6 +64,15 @@ function getColorForType(type: string): string {
     return CATALOG.find(c => c.type === type)?.color ?? '#999';
 }
 
+// Map furniture types to their GLB model components
+const MODEL_MAP: Record<string, React.ComponentType<any>> = {
+    chair: ChairModel,
+    table: TableModel,
+    sofa: SofaModel,
+    bed: BedModel,
+    plant: PlantModel,
+};
+
 // ─── 3D Sub-Components ──────────────────────────────────────────────────────
 
 function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () => void }) {
@@ -98,35 +113,50 @@ function Model({
     updateItem: (id: string, updates: Partial<FurnitureType>) => void;
     setIsDragging: (v: boolean) => void;
 }) {
-    const meshRef = useRef<THREE.Mesh>(null!);
+    const groupRef = useRef<THREE.Group>(null!);
     const size = getSizeForType(item.type);
     const color = getColorForType(item.type);
+    const GlbModel = MODEL_MAP[item.type];
 
     return (
         <group>
-            <mesh
-                ref={meshRef} castShadow receiveShadow
-                position={item.position} rotation={item.rotation}
+            <group
+                ref={groupRef}
+                position={item.position}
+                rotation={item.rotation}
                 onClick={(e) => { e.stopPropagation(); onSelect(); }}
             >
-                <boxGeometry args={size} />
-                <meshStandardMaterial
-                    color={color}
-                    emissive={isSelected ? '#ffd700' : '#000000'}
-                    emissiveIntensity={isSelected ? 0.15 : 0}
-                />
-            </mesh>
-            {isSelected && meshRef.current && (
+                {GlbModel ? (
+                    <Suspense fallback={
+                        <mesh castShadow receiveShadow>
+                            <boxGeometry args={size} />
+                            <meshStandardMaterial color={color} />
+                        </mesh>
+                    }>
+                        <GlbModel scale={[0.5, 0.5, 0.5]} />
+                    </Suspense>
+                ) : (
+                    <mesh castShadow receiveShadow>
+                        <boxGeometry args={size} />
+                        <meshStandardMaterial
+                            color={color}
+                            emissive={isSelected ? '#ffd700' : '#000000'}
+                            emissiveIntensity={isSelected ? 0.15 : 0}
+                        />
+                    </mesh>
+                )}
+            </group>
+            {isSelected && groupRef.current && (
                 <TransformControls
-                    object={meshRef.current}
+                    object={groupRef.current}
                     mode={transformMode}
                     onMouseDown={() => setIsDragging(true)}
                     onMouseUp={() => {
                         setIsDragging(false);
-                        if (meshRef.current) {
+                        if (groupRef.current) {
                             updateItem(item.id, {
-                                position: meshRef.current.position.toArray() as [number, number, number],
-                                rotation: [meshRef.current.rotation.x, meshRef.current.rotation.y, meshRef.current.rotation.z],
+                                position: groupRef.current.position.toArray() as [number, number, number],
+                                rotation: [groupRef.current.rotation.x, groupRef.current.rotation.y, groupRef.current.rotation.z],
                             });
                         }
                     }}
