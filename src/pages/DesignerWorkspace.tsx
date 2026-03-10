@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
-    AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair
+    AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair,
+    Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
@@ -28,6 +29,7 @@ type FurnitureType = {
     name: string;
     position: [number, number, number];
     rotation: [number, number, number];
+    scale?: [number, number, number];
 };
 
 type RoomConfig = {
@@ -65,7 +67,7 @@ function getColorForType(type: string): string {
 }
 
 // Map furniture types to their GLB model components
-const MODEL_MAP: Record<string, React.ComponentType<any>> = {
+const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-line @typescript-eslint/no-explicit-any
     chair: ChairModel,
     table: TableModel,
     sofa: SofaModel,
@@ -104,7 +106,7 @@ function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () =
 }
 
 function Model({
-    item, isSelected, onSelect, transformMode, updateItem, setIsDragging
+    item, isSelected, onSelect, transformMode, updateItem, setIsDragging, snapToGrid
 }: {
     item: FurnitureType;
     isSelected: boolean;
@@ -112,11 +114,17 @@ function Model({
     transformMode: 'translate' | 'rotate';
     updateItem: (id: string, updates: Partial<FurnitureType>) => void;
     setIsDragging: (v: boolean) => void;
+    snapToGrid: boolean;
 }) {
     const groupRef = useRef<THREE.Group>(null!);
     const size = getSizeForType(item.type);
     const color = getColorForType(item.type);
     const GlbModel = MODEL_MAP[item.type];
+    const scale = item.scale || [1, 1, 1];
+
+    // Compute final scale for custom objects and basic cubes
+    const finalGlbScale: [number, number, number] = [0.5 * scale[0], 0.5 * scale[1], 0.5 * scale[2]];
+    const boundingBoxSize: [number, number, number] = [size[0] * scale[0], size[1] * scale[1], size[2] * scale[2]];
 
     return (
         <group>
@@ -128,16 +136,16 @@ function Model({
             >
                 {GlbModel ? (
                     <Suspense fallback={
-                        <mesh castShadow receiveShadow>
-                            <boxGeometry args={size} />
+                        <mesh castShadow receiveShadow position={[0, boundingBoxSize[1] / 2, 0]}>
+                            <boxGeometry args={boundingBoxSize} />
                             <meshStandardMaterial color={color} />
                         </mesh>
                     }>
-                        <GlbModel scale={[0.5, 0.5, 0.5]} />
+                        <GlbModel scale={finalGlbScale} />
                     </Suspense>
                 ) : (
-                    <mesh castShadow receiveShadow>
-                        <boxGeometry args={size} />
+                    <mesh castShadow receiveShadow position={[0, boundingBoxSize[1] / 2, 0]}>
+                        <boxGeometry args={boundingBoxSize} />
                         <meshStandardMaterial
                             color={color}
                             emissive={isSelected ? '#ffd700' : '#000000'}
@@ -146,10 +154,12 @@ function Model({
                     </mesh>
                 )}
             </group>
-            {isSelected && groupRef.current && (
+            {isSelected && transformMode && (
                 <TransformControls
-                    object={groupRef.current}
+                    object={groupRef}
                     mode={transformMode}
+                    translationSnap={snapToGrid ? 0.5 : null}
+                    rotationSnap={snapToGrid ? Math.PI / 4 : null}
                     onMouseDown={() => setIsDragging(true)}
                     onMouseUp={() => {
                         setIsDragging(false);
@@ -175,11 +185,18 @@ export default function DesignerWorkspace() {
     const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
     const [placedItems, setPlacedItems] = useState<FurnitureType[]>([]);
+    const [history, setHistory] = useState<FurnitureType[][]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const [snapToGrid, setSnapToGrid] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<string>(ROOMS[0].id);
     const [isSaving, setIsSaving] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orbitControlsRef = useRef<any>(null);
 
     const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
     const [designName, setDesignName] = useState('');
@@ -232,6 +249,38 @@ export default function DesignerWorkspace() {
         loadFromSupabase();
     }, [designIdFromUrl]);
 
+    // Action History
+    const pushToHistory = (newState: FurnitureType[]) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newState);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    };
+
+    const handleUndo = () => {
+        if (historyIndex > 0) {
+            setHistoryIndex(historyIndex - 1);
+            setPlacedItems(history[historyIndex - 1]);
+            setSelectedId(null);
+        }
+    };
+
+    const handleRedo = () => {
+        if (historyIndex < history.length - 1) {
+            setHistoryIndex(historyIndex + 1);
+            setPlacedItems(history[historyIndex + 1]);
+            setSelectedId(null);
+        }
+    };
+
+    // Ensure initial empty state is in history
+    useEffect(() => {
+        if (history.length === 0 && placedItems.length === 0) {
+            pushToHistory([]);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Handlers
     const addItem = (catalogItem: typeof CATALOG[0]) => {
         const newItem: FurnitureType = {
@@ -240,19 +289,57 @@ export default function DesignerWorkspace() {
             name: catalogItem.name,
             position: [placedItems.length * 0.5, 0, 0],
             rotation: [0, 0, 0],
+            scale: [1, 1, 1],
         };
-        setPlacedItems((prev) => [...prev, newItem]);
+        const newState = [...placedItems, newItem];
+        setPlacedItems(newState);
+        pushToHistory(newState);
         setSelectedId(newItem.id);
     };
 
     const updateItem = (id: string, updates: Partial<FurnitureType>) => {
-        setPlacedItems((prev) => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+        const newState = placedItems.map(item => item.id === id ? { ...item, ...updates } : item);
+        setPlacedItems(newState);
+        pushToHistory(newState);
     };
 
     const deleteSelected = () => {
         if (selectedId) {
-            setPlacedItems((prev) => prev.filter(item => item.id !== selectedId));
+            const newState = placedItems.filter(item => item.id !== selectedId);
+            setPlacedItems(newState);
+            pushToHistory(newState);
             setSelectedId(null);
+        }
+    };
+
+    const duplicateItem = () => {
+        if (selectedId && selectedItem) {
+            const clone: FurnitureType = {
+                ...selectedItem,
+                id: Math.random().toString(36).substr(2, 9),
+                position: [selectedItem.position[0] + 0.5, selectedItem.position[1], selectedItem.position[2] + 0.5],
+            };
+            const newState = [...placedItems, clone];
+            setPlacedItems(newState);
+            pushToHistory(newState);
+            setSelectedId(clone.id);
+        }
+    };
+
+    const handleExportImage = () => {
+        if (canvasRef.current) {
+            const url = canvasRef.current.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'room-design.png';
+            link.href = url;
+            link.click();
+            showToastMessage('Design exported as image!');
+        }
+    };
+
+    const handleResetCamera = () => {
+        if (orbitControlsRef.current) {
+            orbitControlsRef.current.reset();
         }
     };
 
@@ -266,6 +353,8 @@ export default function DesignerWorkspace() {
         setCurrentDesignId(null);
         setDesignName(name);
         setPlacedItems([]);
+        setHistory([[]]);
+        setHistoryIndex(0);
         setSelectedId(null);
         setSelectedRoomId(ROOMS[0].id);
         setIsNewDesignModalOpen(false);
@@ -426,6 +515,42 @@ export default function DesignerWorkspace() {
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 mr-2">
+                            <button
+                                onClick={handleUndo}
+                                disabled={historyIndex <= 0}
+                                className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                title="Undo"
+                            >
+                                <Undo2 size={16} strokeWidth={1.5} />
+                            </button>
+                            <button
+                                onClick={handleRedo}
+                                disabled={historyIndex >= history.length - 1}
+                                className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                title="Redo"
+                            >
+                                <Redo2 size={16} strokeWidth={1.5} />
+                            </button>
+                        </div>
+                        <div className="w-px h-6 bg-stone-light mr-1" />
+                        <button
+                            onClick={handleResetCamera}
+                            className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 mr-2"
+                            title="Reset Camera"
+                        >
+                            <CameraIcon size={16} strokeWidth={1.5} />
+                        </button>
+                        <button
+                            onClick={handleExportImage}
+                            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20
+                                       transition-all duration-300"
+                            title="Export as PNG"
+                        >
+                            <Download size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
+                            <span className="hidden sm:inline">Export</span>
+                        </button>
                         <button
                             onClick={handleCreateNew}
                             className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
@@ -621,7 +746,7 @@ export default function DesignerWorkspace() {
                     {/* ─ Tools ─ */}
                     <div className="p-5 border-b border-stone-light/70">
                         <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Transform</p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 mb-3">
                             <button
                                 onClick={() => setTransformMode('translate')}
                                 className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300 group
@@ -643,6 +768,24 @@ export default function DesignerWorkspace() {
                             >
                                 <RotateCw size={18} strokeWidth={1.5} className="mb-1.5" />
                                 <span className="text-[10px] tracking-wide font-medium uppercase">Rotate</span>
+                            </button>
+                        </div>
+
+                        {/* Snap to Grid Toggle */}
+                        <div className="flex items-center justify-between px-2 mt-4 bg-stone-light/20 py-2 rounded-lg border border-stone-light/40">
+                            <div className="flex items-center gap-2 text-charcoal/60">
+                                <GridIcon size={14} strokeWidth={1.5} />
+                                <span className="text-[11px] tracking-wide font-medium">Snap to Grid</span>
+                            </div>
+                            <button
+                                onClick={() => setSnapToGrid(!snapToGrid)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none ${snapToGrid ? 'bg-sage' : 'bg-stone-light/60'
+                                    }`}
+                            >
+                                <span
+                                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${snapToGrid ? 'translate-x-4.5' : 'translate-x-1'
+                                        }`}
+                                />
                             </button>
                         </div>
                     </div>
@@ -668,9 +811,10 @@ export default function DesignerWorkspace() {
                                                hover:border-sage/40 hover:bg-sage/5
                                                transition-colors duration-300 group cursor-pointer"
                                 >
-                                    <div
-                                        className="w-9 h-9 rounded-lg mb-2.5 shadow-sm group-hover:shadow-md transition-shadow duration-300 border border-black/5"
-                                        style={{ backgroundColor: item.color }}
+                                    <img
+                                        src={`/furniture-icons/${item.type}.png`}
+                                        alt={item.name}
+                                        className="w-12 h-12 object-contain mb-2.5 transition-transform duration-200 group-hover:scale-105"
                                     />
                                     <span className="text-[10px] font-medium text-charcoal/55 group-hover:text-charcoal/80 tracking-wide transition-colors duration-300">
                                         {item.name}
@@ -688,23 +832,108 @@ export default function DesignerWorkspace() {
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
                                 transition={{ duration: 0.25 }}
-                                className="border-t border-stone-light/70 overflow-hidden"
+                                className="border-t border-stone-light/70 bg-white/50 backdrop-blur-md overflow-y-auto max-h-[45vh] scrollbar-thin scrollbar-thumb-stone-light scrollbar-track-transparent"
                             >
-                                <div className="p-5">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Selected</p>
-                                        <span className="text-[11px] font-serif text-charcoal/70">{selectedItem.name}</span>
+                                <div className="p-5 flex flex-col gap-5">
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-bold">Selected Item</p>
+                                        <span className="text-lg font-serif text-charcoal">{selectedItem.name}</span>
                                     </div>
-                                    <button
-                                        onClick={deleteSelected}
-                                        className="w-full py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium
-                                                   text-red-400 border border-red-200/60 bg-red-50/30
-                                                   hover:bg-red-50 hover:text-red-500 hover:border-red-300
-                                                   transition-all duration-300 flex items-center justify-center gap-2"
-                                    >
-                                        <Trash2 size={13} strokeWidth={1.5} />
-                                        Delete Item
-                                    </button>
+
+                                    {/* Position Controls */}
+                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-2">
+                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Position</p>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1 flex items-center bg-stone-light/15 rounded-lg border border-stone-light/40 overflow-hidden focus-within:border-sage/60 focus-within:ring-1 focus-within:ring-sage/20 transition-all">
+                                                <span className="text-[10px] font-bold text-charcoal/40 px-2.5 bg-stone-light/20 h-full flex items-center border-r border-stone-light/40">X</span>
+                                                <input
+                                                    type="number"
+                                                    value={selectedItem.position[0].toFixed(2)}
+                                                    onChange={(e) => updateItem(selectedItem.id, { position: [parseFloat(e.target.value) || 0, selectedItem.position[1], selectedItem.position[2]] })}
+                                                    step={snapToGrid ? 0.5 : 0.1}
+                                                    className="w-full text-xs text-charcoal bg-transparent px-2 py-1.5 outline-none"
+                                                />
+                                            </div>
+                                            <div className="flex-1 flex items-center bg-stone-light/15 rounded-lg border border-stone-light/40 overflow-hidden focus-within:border-sage/60 focus-within:ring-1 focus-within:ring-sage/20 transition-all">
+                                                <span className="text-[10px] font-bold text-charcoal/40 px-2.5 bg-stone-light/20 h-full flex items-center border-r border-stone-light/40">Z</span>
+                                                <input
+                                                    type="number"
+                                                    value={selectedItem.position[2].toFixed(2)}
+                                                    onChange={(e) => updateItem(selectedItem.id, { position: [selectedItem.position[0], selectedItem.position[1], parseFloat(e.target.value) || 0] })}
+                                                    step={snapToGrid ? 0.5 : 0.1}
+                                                    className="w-full text-xs text-charcoal bg-transparent px-2 py-1.5 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Rotation Control */}
+                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-3">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Rotation</p>
+                                            <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
+                                                {Math.round((selectedItem.rotation[1] * 180) / Math.PI)}°
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="360"
+                                            step={snapToGrid ? 45 : 1}
+                                            value={(selectedItem.rotation[1] * 180) / Math.PI}
+                                            onChange={(e) => updateItem(selectedItem.id, { rotation: [selectedItem.rotation[0], (parseFloat(e.target.value) * Math.PI) / 180, selectedItem.rotation[2]] })}
+                                            className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage"
+                                        />
+                                    </div>
+
+                                    {/* Size Control */}
+                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-3">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Size</p>
+                                            <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
+                                                {Math.round((selectedItem.scale?.[0] || 1) * 100)}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="20"
+                                            max="200"
+                                            step={5}
+                                            value={(selectedItem.scale?.[0] || 1) * 100}
+                                            onChange={(e) => {
+                                                const s = parseFloat(e.target.value) / 100;
+                                                updateItem(selectedItem.id, { scale: [s, s, s] });
+                                            }}
+                                            className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage"
+                                        />
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex flex-col gap-2 pt-2 border-t border-stone-light/50 mt-1">
+                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/40 font-medium mb-1">Actions</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={duplicateItem}
+                                                className="flex-1 py-2.5 rounded-lg text-[11px] tracking-[0.05em] uppercase font-medium
+                                                           text-charcoal bg-white border border-stone-light shadow-sm
+                                                           hover:bg-stone-light/20 hover:border-charcoal/30
+                                                           transition-all duration-300 flex items-center justify-center gap-1.5"
+                                            >
+                                                <Copy size={13} strokeWidth={1.5} />
+                                                Duplicate
+                                            </button>
+                                            <button
+                                                onClick={deleteSelected}
+                                                className="flex-1 py-2.5 rounded-lg text-[11px] tracking-[0.05em] uppercase font-medium
+                                                           text-white bg-red-400 border border-red-500/50 shadow-sm
+                                                           hover:bg-red-500 hover:shadow-md hover:-translate-y-0.5
+                                                           transition-all duration-300 flex items-center justify-center gap-1.5"
+                                            >
+                                                <Trash2 size={13} strokeWidth={1.5} className="opacity-80" />
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
@@ -727,7 +956,7 @@ export default function DesignerWorkspace() {
                         </span>
                     </motion.div>
 
-                    <Canvas shadows>
+                    <Canvas shadows ref={canvasRef} gl={{ preserveDrawingBuffer: true }}>
                         {viewMode === '2d' ? (
                             <OrthographicCamera makeDefault position={[0, 10, 0]} zoom={60} near={0.1} far={100} rotation={[-Math.PI / 2, 0, 0]} />
                         ) : (
@@ -763,13 +992,16 @@ export default function DesignerWorkspace() {
                                 transformMode={transformMode}
                                 updateItem={updateItem}
                                 setIsDragging={setIsDragging}
+                                snapToGrid={snapToGrid}
                             />
                         ))}
 
                         {viewMode === '3d' ? (
-                            <OrbitControls makeDefault enabled={!isDragging} minPolarAngle={0} maxPolarAngle={Math.PI / 2 - 0.05} />
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            <OrbitControls ref={orbitControlsRef as any} makeDefault enabled={!isDragging} minPolarAngle={0} maxPolarAngle={Math.PI / 2 - 0.05} />
                         ) : (
-                            <OrbitControls makeDefault enabled={!isDragging} enableRotate={false} />
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            <OrbitControls ref={orbitControlsRef as any} makeDefault enabled={!isDragging} enableRotate={false} />
                         )}
                     </Canvas>
                 </section>
