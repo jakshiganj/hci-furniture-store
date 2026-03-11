@@ -20,7 +20,8 @@ import ChairModel from '../components/models/ChairModel';
 import TableModel from '../components/models/TableModel';
 import SofaModel from '../components/models/SofaModel';
 import BedModel from '../components/models/BedModel';
-import PlantModel from '../components/models/PlantModel';
+import ShelfModel from '../components/models/ShelfModel';
+import VaseModel from '../components/models/VaseModel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FurnitureType = {
@@ -53,10 +54,10 @@ const ROOMS: RoomConfig[] = [
 const CATALOG = [
     { type: 'sofa', name: 'Sofa', color: '#8B7355', size: [2, 0.8, 1] as [number, number, number] },
     { type: 'table', name: 'Table', color: '#A0522D', size: [1.2, 0.75, 0.8] as [number, number, number] },
-    { type: 'plant', name: 'Plant', color: '#6B8E23', size: [0.5, 1, 0.5] as [number, number, number] },
     { type: 'bed', name: 'Bed', color: '#BC8F8F', size: [2, 0.6, 1.8] as [number, number, number] },
     { type: 'shelf', name: 'Shelf', color: '#DEB887', size: [1, 1.8, 0.4] as [number, number, number] },
     { type: 'chair', name: 'Chair', color: '#CD853F', size: [0.6, 0.9, 0.6] as [number, number, number] },
+    { type: 'vase', name: 'Vase', color: '#D8BFD8', size: [0.3, 0.5, 0.3] as [number, number, number] },
 ];
 
 function getSizeForType(type: string): [number, number, number] {
@@ -72,7 +73,8 @@ const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-
     table: TableModel,
     sofa: SofaModel,
     bed: BedModel,
-    plant: PlantModel,
+    shelf: ShelfModel,
+    vase: VaseModel,
 };
 
 // ─── 3D Sub-Components ──────────────────────────────────────────────────────
