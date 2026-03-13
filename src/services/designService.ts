@@ -5,6 +5,9 @@ export interface Design {
     roomType: string;
     createdAt: string;
     furniture: unknown[];
+    wallColor?: string;
+    floorColor?: string;
+    shadeLevel?: number;
 }
 
 // localStorage key
@@ -25,7 +28,7 @@ const writeToStorage = (designs: Design[]): void => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(designs));
 };
 
-// Save a new design
+// Save a new design (returns the created design with generated id and date)
 export const saveDesign = (
     design: Omit<Design, "id" | "createdAt">
 ): Design => {
@@ -41,6 +44,20 @@ export const saveDesign = (
     writeToStorage(designs);
 
     return newDesign;
+};
+
+// Update an existing design by ID (merges the provided fields)
+export const updateDesign = (
+    id: string,
+    updates: Partial<Omit<Design, "id" | "createdAt">>
+): Design | undefined => {
+    const designs = readFromStorage();
+    const index = designs.findIndex((d) => d.id === id);
+    if (index === -1) return undefined;
+
+    designs[index] = { ...designs[index], ...updates };
+    writeToStorage(designs);
+    return designs[index];
 };
 
 // Get all saved designs from localStorage
