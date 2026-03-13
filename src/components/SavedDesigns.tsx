@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight, PenTool } from 'lucide-react';
 import { motion, useInView } from 'framer-motion';
-import { getDesigns, deleteDesign, type Design } from '../services/designService';
-import { isLoggedIn } from '../utils/auth';
+import { getDesigns, deleteDesign, mapFromSupabase, type Design } from '../services/designService';
+import { isLoggedIn, getUser } from '../utils/auth';
+import { supabase } from '../utils/supabase';
 
 export default function SavedDesigns() {
     const navigate = useNavigate();
@@ -12,10 +13,45 @@ export default function SavedDesigns() {
     const inView = useInView(sectionRef, { once: true, margin: '-80px' });
     const loggedIn = isLoggedIn();
 
-    // Load saved designs from localStorage on mount
+    // Load saved designs from localStorage and Supabase on mount
+    useEffect(() => {
+        if (!loggedIn) return;
 
-    // Only show this section for logged-in users
-    if (!loggedIn) return null;
+        const loadDesigns = async () => {
+            // 1. Start with local designs
+            const localDesigns = getDesigns();
+            setDesigns(localDesigns);
+
+            // 2. Fetch from Supabase
+            const user = getUser();
+            if (!user?.id) return;
+
+            const { data, error } = await supabase
+                .from('saved_designs')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (!error && data) {
+                const supabaseDesigns = data.map(mapFromSupabase);
+                
+                setDesigns((prev: Design[]) => {
+                    // Merge: local storage is prioritized for current session, 
+                    // but database is the source of truth for IDs.
+                    // We remove local duplicates if a Supabase entry with same ID exists.
+                    const merged = [...supabaseDesigns];
+                    prev.forEach((p: Design) => {
+                        if (!merged.find(m => m.id === p.id)) {
+                            merged.push(p);
+                        }
+                    });
+                    return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                });
+            }
+        };
+
+        loadDesigns();
+    }, [loggedIn]);
 
     // Open a saved design by navigating to the designer with its ID
     const handleOpen = (id: string) => {
@@ -23,10 +59,20 @@ export default function SavedDesigns() {
     };
 
     // Delete a design and refresh the list
-    const handleDelete = (e: React.MouseEvent, id: string) => {
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
+        
+        // 1. Delete from local storage
         deleteDesign(id);
-        setDesigns(getDesigns());
+        
+        // 2. Delete from Supabase if it's a UUID
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isUUID) {
+            await supabase.from('saved_designs').delete().eq('id', id);
+        }
+
+        // 3. Update local state
+        setDesigns((prev: Design[]) => prev.filter(d => d.id !== id));
     };
 
     return (
@@ -73,7 +119,7 @@ export default function SavedDesigns() {
                 ) : (
                     /* Designs Grid */
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {designs.map((design, i) => (
+                        {designs.map((design: Design, i: number) => (
                             <motion.div
                                 key={design.id}
                                 initial={{ opacity: 0, y: 40 }}

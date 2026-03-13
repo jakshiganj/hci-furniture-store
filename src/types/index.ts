@@ -27,10 +27,12 @@ export interface Order {
 
 export interface FurnitureItem {
     id: string;
-    type: 'sofa' | 'table' | 'plant' | 'bed' | 'shelf';
+    type: string;
     name: string;
     position: [number, number, number];
     rotation: [number, number, number];
+    scale?: [number, number, number];
+    color?: string;
 }
 
 export interface SavedDesign {
@@ -39,5 +41,14 @@ export interface SavedDesign {
     name: string;
     room_type: string;
     furniture_layout: FurnitureItem[];
+    wall_color?: string;
+    floor_color?: string;
+    wall_texture?: string;
+    lighting_mode?: string;
+    custom_width?: number;
+    custom_depth?: number;
+    light_pos_x?: number;
+    light_pos_y?: number;
+    light_pos_z?: number;
     created_at: string;
 }

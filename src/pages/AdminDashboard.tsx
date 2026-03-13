@@ -384,6 +384,13 @@ function DesignsTab() {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-serif text-charcoal">Designer Gallery</h2>
+                <Link 
+                    to="/configure"
+                    className="flex items-center gap-2 px-6 py-2 bg-charcoal text-white rounded-xl text-sm font-medium hover:bg-charcoal/90 transition-all hover:shadow-lg active:scale-95"
+                >
+                    <Plus size={16} />
+                    New Design
+                </Link>
             </div>
             
             {loading ? (

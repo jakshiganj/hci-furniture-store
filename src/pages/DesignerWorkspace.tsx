@@ -1,22 +1,35 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
     AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair,
     Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download,
-    Paintbrush, Sun
+    Paintbrush, Sun, ArrowRight
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import {
     OrthographicCamera, PerspectiveCamera, OrbitControls,
-    Grid, Environment, TransformControls
+    Grid
 } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { Suspense } from 'react';
+import type { WallTexture } from '../components/3d/RoomGeometry';
+import { RoomGeometry } from '../components/3d/RoomGeometry';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
-import { saveDesign as saveToLocal, updateDesign as updateLocal, getDesignById as getLocalDesign } from '../services/designService';
+import {
+    saveDesign as saveToLocal,
+    updateDesign as updateLocal,
+    getDesignById as getLocalDesign,
+    migrateDesignId,
+    type LightPos,
+    type LightingMode,
+    ROOMS,
+    LIGHTING_PRESETS
+} from '../services/designService';
+import { LightingRig } from '../components/3d/LightingRig';
 import ChairModel from '../components/models/ChairModel';
 import TableModel from '../components/models/TableModel';
 import SofaModel from '../components/models/SofaModel';
@@ -24,7 +37,8 @@ import BedModel from '../components/models/BedModel';
 import ShelfModel from '../components/models/ShelfModel';
 import VaseModel from '../components/models/VaseModel';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type FurnitureType = {
     id: string;
     type: string;
@@ -32,34 +46,25 @@ type FurnitureType = {
     position: [number, number, number];
     rotation: [number, number, number];
     scale?: [number, number, number];
-    color?: string; // ✅ NEW: per-item colour
+    color?: string;
 };
 
-type RoomConfig = {
-    id: string;
-    name: string;
-    width: number;
-    depth: number;
-    height: number;
-    wallColor: string;
-    floorColor: string;
-};
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-const ROOMS: RoomConfig[] = [
-    { id: 'living', name: 'Living Room', width: 10, depth: 8, height: 3, wallColor: '#f5f0ea', floorColor: '#d4c9b8' },
-    { id: 'bedroom', name: 'Bedroom', width: 8, depth: 6, height: 3, wallColor: '#ece7df', floorColor: '#c9bfb0' },
-    { id: 'kitchen', name: 'Kitchen', width: 8, depth: 8, height: 3, wallColor: '#f0ebe3', floorColor: '#bfb5a5' },
-    { id: 'office', name: 'Office', width: 7, depth: 6, height: 3, wallColor: '#eae5dd', floorColor: '#c4baa9' },
-];
+
+// CATALOG is internal to this file
 
 const CATALOG = [
-    { type: 'sofa', name: 'Sofa', color: '#8B7355', size: [2, 0.8, 1] as [number, number, number] },
-    { type: 'table', name: 'Table', color: '#A0522D', size: [1.2, 0.75, 0.8] as [number, number, number] },
-    { type: 'bed', name: 'Bed', color: '#BC8F8F', size: [2, 0.6, 1.8] as [number, number, number] },
-    { type: 'shelf', name: 'Shelf', color: '#DEB887', size: [1, 1.8, 0.4] as [number, number, number] },
+    { type: 'sofa', name: 'Sofa', color: '#8B7355', size: [2.1, 0.8, 1.0] as [number, number, number] },
+    { type: 'table', name: 'Table', color: '#A0522D', size: [1.4, 0.75, 0.8] as [number, number, number] },
+    { type: 'bed', name: 'Bed', color: '#BC8F8F', size: [2.0, 0.6, 1.8] as [number, number, number] },
+    { type: 'shelf', name: 'Shelf', color: '#DEB887', size: [1.0, 1.8, 0.4] as [number, number, number] },
     { type: 'chair', name: 'Chair', color: '#CD853F', size: [0.6, 0.9, 0.6] as [number, number, number] },
-    { type: 'vase', name: 'Vase', color: '#D8BFD8', size: [0.3, 0.5, 0.3] as [number, number, number] },
+    { type: 'vase', name: 'Vase', color: '#D8BFD8', size: [0.35, 0.55, 0.35] as [number, number, number] },
+    { type: 'desk', name: 'Desk', color: '#8B6914', size: [1.5, 0.75, 0.75] as [number, number, number] },
+    { type: 'wardrobe', name: 'Wardrobe', color: '#7B5E3A', size: [1.3, 2.1, 0.6] as [number, number, number] },
+    { type: 'lamp', name: 'Floor Lamp', color: '#D4AF37', size: [0.35, 1.7, 0.35] as [number, number, number] },
+    { type: 'tv', name: 'TV Stand', color: '#3A3A3A', size: [1.6, 0.55, 0.45] as [number, number, number] },
 ];
 
 function getSizeForType(type: string): [number, number, number] {
@@ -69,7 +74,7 @@ function getDefaultColorForType(type: string): string {
     return CATALOG.find(c => c.type === type)?.color ?? '#999';
 }
 
-const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-line @typescript-eslint/no-explicit-any
+const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, number]; castShadow?: boolean; receiveShadow?: boolean }>> = {
     chair: ChairModel,
     table: TableModel,
     sofa: SofaModel,
@@ -78,47 +83,102 @@ const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-
     vase: VaseModel,
 };
 
-// ─── 3D Sub-Components ──────────────────────────────────────────────────────
+// ─── 3D Model component ───────────────────────────────────────────────────────
 
-function RoomGeometry({ room, wallColor, floorColor, onDeselect }: {
-    room: RoomConfig;
-    wallColor: string;   // ✅ live overrides
-    floorColor: string;
-    onDeselect: () => void;
+// ─── Rotation handle ──────────────────────────────────────────────────────────
+// A visible circular arc rendered above the selected item.
+// Dragging it spins the item on the Y axis.
+
+function RotationHandle({
+    position,
+    radius,
+    onRotateStart,
+    onRotating,
+    onRotateEnd,
+}: {
+    position: [number, number, number];
+    radius: number;
+    onRotateStart: () => void;
+    onRotating: (angle: number) => void;
+    onRotateEnd: () => void;
 }) {
-    const { width, depth, height } = room;
-    const hw = width / 2;
-    const hd = depth / 2;
+    const { camera, gl } = useThree();
+    const isDragging = useRef(false);
+    const startAngle = useRef(0);
+
+    const getAngleFromPointer = useCallback((clientX: number, clientY: number) => {
+        const rect = gl.domElement.getBoundingClientRect();
+        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = ((clientY - rect.top) / rect.height) * -2 + 1;
+        // Project center position to screen
+        const center = new THREE.Vector3(...position).project(camera);
+        return Math.atan2(ndcY - center.y, ndcX - center.x);
+    }, [camera, gl, position]);
 
     return (
-        <group>
-            {/* Floor */}
-            <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}
-                onClick={(e) => { e.stopPropagation(); onDeselect(); }}>
-                <planeGeometry args={[width, depth]} />
-                <meshStandardMaterial color={floorColor} />
+        <group position={position}>
+            {/* Dashed rotation ring */}
+            <mesh
+                onPointerDown={(e) => {
+                    e.stopPropagation();
+                    isDragging.current = true;
+                    startAngle.current = getAngleFromPointer(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                    onRotateStart();
+                    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                    if (!isDragging.current) return;
+                    const currentAngle = getAngleFromPointer(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                    onRotating(currentAngle - startAngle.current);
+                    startAngle.current = currentAngle;
+                }}
+                onPointerUp={() => {
+                    isDragging.current = false;
+                    onRotateEnd();
+                }}
+            >
+                <torusGeometry args={[radius, 0.04, 8, 48]} />
+                <meshStandardMaterial
+                    color="#f59e0b"
+                    emissive="#f59e0b"
+                    emissiveIntensity={0.6}
+                    roughness={0.3}
+                    metalness={0.5}
+                    transparent
+                    opacity={0.9}
+                />
             </mesh>
-            {/* Back wall */}
-            <mesh receiveShadow position={[0, height / 2, -hd]}>
-                <planeGeometry args={[width, height]} />
-                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
+
+            {/* Arrow indicator at top of ring */}
+            <mesh position={[0, 0, radius]} rotation={[Math.PI / 2, 0, 0]}>
+                <coneGeometry args={[0.1, 0.2, 8]} />
+                <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.8} />
             </mesh>
-            {/* Left wall */}
-            <mesh receiveShadow position={[-hw, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-                <planeGeometry args={[depth, height]} />
-                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
-            </mesh>
-            {/* Right wall */}
-            <mesh receiveShadow position={[hw, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-                <planeGeometry args={[depth, height]} />
-                <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
+
+            {/* Rotation icon label */}
+            <mesh position={[0, 0.15, 0]}>
+                <sphereGeometry args={[0.09, 8, 8]} />
+                <meshStandardMaterial color="#ffffff" emissive="#f59e0b" emissiveIntensity={0.5} />
             </mesh>
         </group>
     );
 }
 
+// ─── Selection outline box ────────────────────────────────────────────────────
+
+function SelectionBox({ size }: { size: [number, number, number] }) {
+    return (
+        <lineSegments position={[0, size[1] / 2, 0]}>
+            <edgesGeometry args={[new THREE.BoxGeometry(...size)]} />
+            <lineBasicMaterial color="#f59e0b" linewidth={2} transparent opacity={0.7} />
+        </lineSegments>
+    );
+}
+
+// ─── 3D Model component ───────────────────────────────────────────────────────
+
 function Model({
-    item, isSelected, onSelect, transformMode, updateItem, setIsDragging, snapToGrid
+    item, isSelected, onSelect, transformMode, updateItem, setIsDragging, snapToGrid,
 }: {
     item: FurnitureType;
     isSelected: boolean;
@@ -128,15 +188,50 @@ function Model({
     setIsDragging: (v: boolean) => void;
     snapToGrid: boolean;
 }) {
+    const { camera, gl } = useThree();
     const groupRef = useRef<THREE.Group>(null!);
+    const isDragging = useRef(false);
+    const dragOffset = useRef(new THREE.Vector3());
+    const currentRotation = useRef(item.rotation[1]);
+
     const size = getSizeForType(item.type);
-    // ✅ Use per-item colour, fall back to catalog default
     const color = item.color ?? getDefaultColorForType(item.type);
     const GlbModel = MODEL_MAP[item.type];
-    const scale = item.scale || [1, 1, 1];
+    const scale = item.scale ?? [1, 1, 1];
+    const GVS = 0.85;
+    const finalGlbScale: [number, number, number] = [
+        size[0] * scale[0] * GVS,
+        size[1] * scale[1] * GVS,
+        size[2] * scale[2] * GVS,
+    ];
+    const bbox: [number, number, number] = [
+        size[0] * scale[0],
+        size[1] * scale[1],
+        size[2] * scale[2],
+    ];
 
-    const finalGlbScale: [number, number, number] = [0.5 * scale[0], 0.5 * scale[1], 0.5 * scale[2]];
-    const boundingBoxSize: [number, number, number] = [size[0] * scale[0], size[1] * scale[1], size[2] * scale[2]];
+    // Snap helper
+    const snap = (v: number) => snapToGrid ? Math.round(v / 0.5) * 0.5 : v;
+
+    // Raycast to floor plane (Y = 0)
+    const floorPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+    const intersection = useRef(new THREE.Vector3());
+    const raycaster = useRef(new THREE.Raycaster());
+
+    const getFloorPoint = useCallback((clientX: number, clientY: number) => {
+        const rect = gl.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            ((clientY - rect.top) / rect.height) * -2 + 1,
+        );
+        raycaster.current.setFromCamera(ndc, camera);
+        raycaster.current.ray.intersectPlane(floorPlane.current, intersection.current);
+        return intersection.current.clone();
+    }, [camera, gl]);
+
+    // Radius for rotation ring — just outside the item's footprint
+    const ringRadius = Math.max(bbox[0], bbox[2]) * 0.5 + 0.35;
+    const ringHeight = bbox[1] + 0.1;
 
     return (
         <group>
@@ -144,53 +239,149 @@ function Model({
                 ref={groupRef}
                 position={item.position}
                 rotation={item.rotation}
-                onClick={(e) => { e.stopPropagation(); onSelect(); }}
             >
+                {/* ── Mesh ── */}
                 {GlbModel ? (
                     <Suspense fallback={
-                        <mesh castShadow receiveShadow position={[0, boundingBoxSize[1] / 2, 0]}>
-                            <boxGeometry args={boundingBoxSize} />
-                            <meshStandardMaterial color={color} />
+                        <mesh castShadow receiveShadow position={[0, bbox[1] / 2, 0]}
+                            onPointerDown={transformMode === 'translate' && isSelected ? (e) => {
+                                e.stopPropagation();
+                                isDragging.current = true;
+                                setIsDragging(true);
+                                const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                                dragOffset.current.set(item.position[0] - pt.x, 0, item.position[2] - pt.z);
+                                (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                            } : undefined}
+                            onPointerMove={transformMode === 'translate' && isSelected ? (e) => {
+                                if (!isDragging.current) return;
+                                const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                                const nx = snap(pt.x + dragOffset.current.x);
+                                const nz = snap(pt.z + dragOffset.current.z);
+                                groupRef.current.position.set(nx, 0, nz);
+                            } : undefined}
+                            onPointerUp={transformMode === 'translate' && isSelected ? () => {
+                                if (!isDragging.current) return;
+                                isDragging.current = false;
+                                setIsDragging(false);
+                                const p = groupRef.current.position;
+                                updateItem(item.id, { position: [p.x, 0, p.z] });
+                            } : undefined}
+                            onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                        >
+                            <boxGeometry args={bbox} />
+                            <meshStandardMaterial color={color} roughness={0.7} metalness={0.05} />
                         </mesh>
                     }>
-                        <GlbModel scale={finalGlbScale} />
+                        <group
+                            onPointerDown={transformMode === 'translate' && isSelected ? (e) => {
+                                e.stopPropagation();
+                                isDragging.current = true;
+                                setIsDragging(true);
+                                const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                                dragOffset.current.set(item.position[0] - pt.x, 0, item.position[2] - pt.z);
+                                (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                            } : undefined}
+                            onPointerMove={transformMode === 'translate' && isSelected ? (e) => {
+                                if (!isDragging.current) return;
+                                const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                                const nx = snap(pt.x + dragOffset.current.x);
+                                const nz = snap(pt.z + dragOffset.current.z);
+                                groupRef.current.position.set(nx, 0, nz);
+                            } : undefined}
+                            onPointerUp={transformMode === 'translate' && isSelected ? () => {
+                                if (!isDragging.current) return;
+                                isDragging.current = false;
+                                setIsDragging(false);
+                                const p = groupRef.current.position;
+                                updateItem(item.id, { position: [p.x, 0, p.z] });
+                            } : undefined}
+                            onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                        >
+                            <GlbModel scale={finalGlbScale} castShadow receiveShadow />
+                        </group>
                     </Suspense>
                 ) : (
-                    <mesh castShadow receiveShadow position={[0, boundingBoxSize[1] / 2, 0]}>
-                        <boxGeometry args={boundingBoxSize} />
+                    <mesh
+                        castShadow receiveShadow
+                        position={[0, bbox[1] / 2, 0]}
+                        onPointerDown={transformMode === 'translate' && isSelected ? (e) => {
+                            e.stopPropagation();
+                            isDragging.current = true;
+                            setIsDragging(true);
+                            const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                            dragOffset.current.set(item.position[0] - pt.x, 0, item.position[2] - pt.z);
+                            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                        } : undefined}
+                        onPointerMove={transformMode === 'translate' && isSelected ? (e) => {
+                            if (!isDragging.current) return;
+                            const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
+                            const nx = snap(pt.x + dragOffset.current.x);
+                            const nz = snap(pt.z + dragOffset.current.z);
+                            groupRef.current.position.set(nx, 0, nz);
+                        } : undefined}
+                        onPointerUp={transformMode === 'translate' && isSelected ? () => {
+                            if (!isDragging.current) return;
+                            isDragging.current = false;
+                            setIsDragging(false);
+                            const p = groupRef.current.position;
+                            updateItem(item.id, { position: [p.x, 0, p.z] });
+                        } : undefined}
+                        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                    >
+                        <boxGeometry args={bbox} />
                         <meshStandardMaterial
                             color={color}
-                            emissive={isSelected ? '#ffd700' : '#000000'}
-                            emissiveIntensity={isSelected ? 0.15 : 0}
+                            roughness={0.65}
+                            metalness={0.05}
+                            emissive={isSelected ? '#f59e0b' : '#000000'}
+                            emissiveIntensity={isSelected ? 0.08 : 0}
                         />
                     </mesh>
                 )}
+
+                {/* ── Selection outline ── */}
+                {isSelected && <SelectionBox size={bbox} />}
             </group>
-            {isSelected && transformMode && (
-                <TransformControls
-                    object={groupRef}
-                    mode={transformMode}
-                    translationSnap={snapToGrid ? 0.5 : null}
-                    rotationSnap={snapToGrid ? Math.PI / 4 : null}
-                    onMouseDown={() => setIsDragging(true)}
-                    onMouseUp={() => {
+
+            {/* ── Rotation handle (outside group so it stays upright) ── */}
+            {isSelected && transformMode === 'rotate' && (
+                <RotationHandle
+                    position={[item.position[0], ringHeight, item.position[2]]}
+                    radius={ringRadius}
+                    onRotateStart={() => {
+                        currentRotation.current = item.rotation[1];
+                        setIsDragging(true);
+                    }}
+                    onRotating={(delta) => {
+                        currentRotation.current -= delta; // subtract = natural drag direction
+                        groupRef.current.rotation.y = currentRotation.current;
+                    }}
+                    onRotateEnd={() => {
                         setIsDragging(false);
-                        if (groupRef.current) {
-                            updateItem(item.id, {
-                                position: groupRef.current.position.toArray() as [number, number, number],
-                                rotation: [groupRef.current.rotation.x, groupRef.current.rotation.y, groupRef.current.rotation.z],
-                            });
-                        }
+                        updateItem(item.id, {
+                            rotation: [0, currentRotation.current, 0],
+                        });
                     }}
                 />
+            )}
+
+            {/* ── Click outside to deselect ── */}
+            {!isSelected && (
+                <group onClick={(e) => { e.stopPropagation(); onSelect(); }}>
+                    <mesh position={[item.position[0], bbox[1] / 2, item.position[2]]} visible={false}>
+                        <boxGeometry args={[bbox[0] + 0.1, bbox[1] + 0.1, bbox[2] + 0.1]} />
+                        <meshBasicMaterial transparent opacity={0} />
+                    </mesh>
+                </group>
             )}
         </group>
     );
 }
 
-// ─── Confirm Dialog ──────────────────────────────────────────────────────────
+// ─── Confirm Dialog ───────────────────────────────────────────────────────────
+
 function ConfirmDialog({
-    open, title, message, onConfirm, onCancel
+    open, title, message, onConfirm, onCancel,
 }: {
     open: boolean;
     title: string;
@@ -241,59 +432,73 @@ function ConfirmDialog({
     );
 }
 
-// ─── Main Page Component ─────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const designIdFromUrl = searchParams.get('designId');
+    const roomIdParam = searchParams.get('roomId');
+    const widthParam = searchParams.get('width');
+    const depthParam = searchParams.get('depth');
+    const wallColorParam = searchParams.get('wallColor');
+    const floorColorParam = searchParams.get('floorColor');
+    const wallTextureParam = searchParams.get('wallTexture') as WallTexture | null;
+    const lightingParam = searchParams.get('lightingMode') as LightingMode | null;
+    const nameParam = searchParams.get('name');
 
+    // ── View & tool state ────────────────────────────────────────────────────
     const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
+    const [snapToGrid, setSnapToGrid] = useState(false);
     const [placedItems, setPlacedItems] = useState<FurnitureType[]>([]);
     const [history, setHistory] = useState<FurnitureType[][]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
-    const [snapToGrid, setSnapToGrid] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [selectedRoomId, setSelectedRoomId] = useState<string>(ROOMS[0].id);
+
+    // ── Room / environment state ─────────────────────────────────────────────
+    const [selectedRoomId, setSelectedRoomId] = useState(roomIdParam || ROOMS[0].id);
+    const [customWallColor, setCustomWallColor] = useState(wallColorParam ? decodeURIComponent(wallColorParam) : '');
+    const [customFloorColor, setCustomFloorColor] = useState(floorColorParam ? decodeURIComponent(floorColorParam) : '');
+    const [wallTexture, setWallTexture] = useState<WallTexture>(wallTextureParam || 'plain');
+    const [lightingMode, setLightingMode] = useState<LightingMode>(lightingParam || 'natural');
+    const [designName, setDesignName] = useState(nameParam ? decodeURIComponent(nameParam) : '');
+    const [customWidth, setCustomWidth] = useState(widthParam ? parseFloat(widthParam) : 0);
+    const [customDepth, setCustomDepth] = useState(depthParam ? parseFloat(depthParam) : 0);
+
+    // ── Real light source position ───────────────────────────────────────────
+    const [lightPos, setLightPos] = useState<LightPos>({ x: 5, y: 8, z: 5 });
+
+    // ── Save / UI state ──────────────────────────────────────────────────────
     const [isSaving, setIsSaving] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-    // ✅ NEW: live room colour overrides (persisted to Supabase)
-    const [customWallColor, setCustomWallColor] = useState<string>('');
-    const [customFloorColor, setCustomFloorColor] = useState<string>('');
-
-    // ✅ NEW: shading overlay (0–0.8 opacity)
-    const [shadeLevel, setShadeLevel] = useState<number>(0);
-
-    // ✅ FIX: proper canvas ref for export
-    const glRef = useRef<THREE.WebGLRenderer | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const orbitControlsRef = useRef<any>(null);
-
-    // ✅ NEW: delete confirmation
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-
     const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
-    const [designName, setDesignName] = useState('');
     const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
     const [newDesignName, setNewDesignName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
+    const [sidebarMode, setSidebarMode] = useState<'room' | 'furniture'>(designIdFromUrl || roomIdParam ? 'furniture' : 'room');
     const [isSaveNameModalOpen, setIsSaveNameModalOpen] = useState(false);
     const [saveNameInput, setSaveNameInput] = useState('');
 
+    // ── Refs ─────────────────────────────────────────────────────────────────
+    const glRef = useRef<THREE.WebGLRenderer | null>(null);
+    const orbitControlsRef = useRef<OrbitControlsImpl>(null);
+
+    // ── Derived ──────────────────────────────────────────────────────────────
+    const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
+    const effectiveWidth = customWidth || activeRoom.width;
+    const effectiveDepth = customDepth || activeRoom.depth;
+    const effectiveWallColor = customWallColor || activeRoom.wallColor;
+    const effectiveFloorColor = customFloorColor || activeRoom.floorColor;
+    const selectedItem = placedItems.find(i => i.id === selectedId);
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
     const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
     };
-
-    const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
-
-    // Resolve effective wall/floor colors (custom override or room default)
-    const effectiveWallColor = customWallColor || activeRoom.wallColor;
-    const effectiveFloorColor = customFloorColor || activeRoom.floorColor;
-
-    const selectedItem = placedItems.find(i => i.id === selectedId);
 
     // Reset colour overrides when room type changes
     useEffect(() => {
@@ -301,79 +506,68 @@ export default function DesignerWorkspace() {
         setCustomFloorColor('');
     }, [selectedRoomId]);
 
-    // --- Load Design ---
+    // ── Load design ──────────────────────────────────────────────────────────
     useEffect(() => {
         if (!designIdFromUrl) return;
 
-        const localDesign = getLocalDesign(designIdFromUrl);
-        if (localDesign) {
-            setCurrentDesignId(localDesign.id);
-            setDesignName(localDesign.name || 'Untitled Room');
-            setSelectedRoomId(localDesign.roomType || ROOMS[0].id);
-            setPlacedItems((localDesign.furniture as FurnitureType[]) || []);
-            // ✅ Restore saved colours
-            if (localDesign.wallColor) setCustomWallColor(localDesign.wallColor);
-            if (localDesign.floorColor) setCustomFloorColor(localDesign.floorColor);
-            if (localDesign.shadeLevel !== undefined) setShadeLevel(localDesign.shadeLevel);
+        const local = getLocalDesign(designIdFromUrl);
+        if (local) {
+            setCurrentDesignId(local.id);
+            setDesignName(local.name || 'Untitled Room');
+            setSelectedRoomId(local.roomType || ROOMS[0].id);
+            setPlacedItems((local.furniture as FurnitureType[]) || []);
+            if (local.wallColor) setCustomWallColor(local.wallColor);
+            if (local.floorColor) setCustomFloorColor(local.floorColor);
+            if (local.wallTexture) setWallTexture(local.wallTexture as WallTexture);
+            if (local.lightingMode) setLightingMode(local.lightingMode as LightingMode);
+            if (local.customWidth) setCustomWidth(local.customWidth);
+            if (local.customDepth) setCustomDepth(local.customDepth);
+            if (local.lightPos) setLightPos(local.lightPos);
             return;
         }
 
-        const loadFromSupabase = async () => {
+        (async () => {
             const user = getUser();
-            if (!user?.id) return;
-
+            if (!user?.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(designIdFromUrl!)) return;
             const { data, error } = await supabase
                 .from('saved_designs')
                 .select('*')
                 .eq('id', designIdFromUrl);
-
-            if (data && data.length > 0 && !error) {
-                const design = data[0];
-                setCurrentDesignId(design.id);
-                setDesignName(design.name || 'Untitled Room');
-                setSelectedRoomId(design.room_type);
-                setPlacedItems(design.furniture_layout || []);
-                // ✅ Restore saved colours from Supabase
-                if (design.wall_color) setCustomWallColor(design.wall_color);
-                if (design.floor_color) setCustomFloorColor(design.floor_color);
-                if (design.shade_level !== undefined) setShadeLevel(design.shade_level);
+            if (data?.[0] && !error) {
+                const d = data[0];
+                setCurrentDesignId(d.id);
+                setDesignName(d.name || 'Untitled Room');
+                setSelectedRoomId(d.room_type);
+                setPlacedItems(d.furniture_layout || []);
+                if (d.wall_color) setCustomWallColor(d.wall_color);
+                if (d.floor_color) setCustomFloorColor(d.floor_color);
+                if (d.wall_texture) setWallTexture(d.wall_texture as WallTexture);
+                if (d.lighting_mode) setLightingMode(d.lighting_mode as LightingMode);
+                if (d.custom_width) setCustomWidth(d.custom_width);
+                if (d.custom_depth) setCustomDepth(d.custom_depth);
+                if (d.light_pos_x !== undefined) setLightPos({ x: d.light_pos_x, y: d.light_pos_y, z: d.light_pos_z });
             }
-        };
-        loadFromSupabase();
+        })();
     }, [designIdFromUrl]);
 
-    // History management
+    // ── History ──────────────────────────────────────────────────────────────
     const pushToHistory = (newState: FurnitureType[]) => {
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(newState);
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
+        const next = history.slice(0, historyIndex + 1);
+        next.push(newState);
+        setHistory(next);
+        setHistoryIndex(next.length - 1);
     };
-
     const handleUndo = () => {
-        if (historyIndex > 0) {
-            setHistoryIndex(historyIndex - 1);
-            setPlacedItems(history[historyIndex - 1]);
-            setSelectedId(null);
-        }
+        if (historyIndex > 0) { setHistoryIndex(historyIndex - 1); setPlacedItems(history[historyIndex - 1]); setSelectedId(null); }
     };
-
     const handleRedo = () => {
-        if (historyIndex < history.length - 1) {
-            setHistoryIndex(historyIndex + 1);
-            setPlacedItems(history[historyIndex + 1]);
-            setSelectedId(null);
-        }
+        if (historyIndex < history.length - 1) { setHistoryIndex(historyIndex + 1); setPlacedItems(history[historyIndex + 1]); setSelectedId(null); }
     };
-
     useEffect(() => {
-        if (history.length === 0 && placedItems.length === 0) {
-            pushToHistory([]);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        if (history.length === 0 && placedItems.length === 0) pushToHistory([]);
+    }, []); // eslint-disable-line
 
-    // Handlers
+    // ── Item ops ─────────────────────────────────────────────────────────────
     const addItem = (catalogItem: typeof CATALOG[0]) => {
         const newItem: FurnitureType = {
             id: Math.random().toString(36).substr(2, 9),
@@ -382,79 +576,62 @@ export default function DesignerWorkspace() {
             position: [placedItems.length * 0.5, 0, 0],
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
-            color: catalogItem.color, // ✅ set default color on creation
+            color: catalogItem.color,
         };
-        const newState = [...placedItems, newItem];
-        setPlacedItems(newState);
-        pushToHistory(newState);
+        const next = [...placedItems, newItem];
+        setPlacedItems(next);
+        pushToHistory(next);
         setSelectedId(newItem.id);
     };
 
     const updateItem = (id: string, updates: Partial<FurnitureType>) => {
-        const newState = placedItems.map(item => item.id === id ? { ...item, ...updates } : item);
-        setPlacedItems(newState);
-        pushToHistory(newState);
+        const next = placedItems.map(item => item.id === id ? { ...item, ...updates } : item);
+        setPlacedItems(next);
+        pushToHistory(next);
     };
 
-    // ✅ FIX: show confirm dialog before deleting
-    const deleteSelected = () => {
-        if (selectedId) setIsDeleteConfirmOpen(true);
-    };
-
+    const deleteSelected = () => { if (selectedId) setIsDeleteConfirmOpen(true); };
     const confirmDelete = () => {
-        if (selectedId) {
-            const newState = placedItems.filter(item => item.id !== selectedId);
-            setPlacedItems(newState);
-            pushToHistory(newState);
-            setSelectedId(null);
-            setIsDeleteConfirmOpen(false);
-            showToastMessage('Item removed from design');
-        }
+        if (!selectedId) return;
+        const next = placedItems.filter(i => i.id !== selectedId);
+        setPlacedItems(next);
+        pushToHistory(next);
+        setSelectedId(null);
+        setIsDeleteConfirmOpen(false);
+        showToastMessage('Item removed from design');
     };
 
     const duplicateItem = () => {
-        if (selectedId && selectedItem) {
-            const clone: FurnitureType = {
-                ...selectedItem,
-                id: Math.random().toString(36).substr(2, 9),
-                position: [selectedItem.position[0] + 0.5, selectedItem.position[1], selectedItem.position[2] + 0.5],
-            };
-            const newState = [...placedItems, clone];
-            setPlacedItems(newState);
-            pushToHistory(newState);
-            setSelectedId(clone.id);
-        }
+        if (!selectedId || !selectedItem) return;
+        const clone: FurnitureType = {
+            ...selectedItem,
+            id: Math.random().toString(36).substr(2, 9),
+            position: [selectedItem.position[0] + 0.5, selectedItem.position[1], selectedItem.position[2] + 0.5],
+        };
+        const next = [...placedItems, clone];
+        setPlacedItems(next);
+        pushToHistory(next);
+        setSelectedId(clone.id);
     };
 
-    // ✅ FIX: proper canvas export using gl.domElement
+    // ── Export (fixed: just call toDataURL on preserved canvas) ─────────────
     const handleExportImage = () => {
         if (glRef.current) {
-            glRef.current.render(
-                glRef.current.getRenderTarget()?.texture as unknown as THREE.Scene,
-                new THREE.Camera()
-            );
             const url = glRef.current.domElement.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = `${designName || 'room-design'}.png`;
-            link.href = url;
-            link.click();
+            const a = document.createElement('a');
+            a.download = `${designName || 'room-design'}.png`;
+            a.href = url;
+            a.click();
             showToastMessage('Design exported as image!');
         } else {
             showToastMessage('Export failed — try again after the scene loads.', 'error');
         }
     };
 
-    const handleResetCamera = () => {
-        if (orbitControlsRef.current) {
-            orbitControlsRef.current.reset();
-        }
-    };
+    const handleResetCamera = () => { orbitControlsRef.current?.reset(); };
 
-    const handleCreateNew = () => {
-        setNewDesignName('');
-        setIsNewDesignModalOpen(true);
-    };
-
+    // ── New design ────────────────────────────────────────────────────────────
+    const handleCreateNew = () => { setNewDesignName(''); setIsNewDesignModalOpen(true); };
     const confirmCreateNew = () => {
         const name = newDesignName.trim() || `Room Design - ${new Date().toLocaleDateString()}`;
         setCurrentDesignId(null);
@@ -466,18 +643,16 @@ export default function DesignerWorkspace() {
         setSelectedRoomId(ROOMS[0].id);
         setCustomWallColor('');
         setCustomFloorColor('');
-        setShadeLevel(0);
+        setLightPos({ x: 5, y: 8, z: 5 });
         setIsNewDesignModalOpen(false);
         setSearchParams({});
         showToastMessage(`New design "${name}" created`);
     };
 
+    // ── Save ──────────────────────────────────────────────────────────────────
     const handleSave = async () => {
         const user = getUser();
-        if (!user?.id) {
-            showToastMessage('Please sign in to save your designs.', 'error');
-            return;
-        }
+        if (!user?.id) { showToastMessage('Please sign in to save.', 'error'); return; }
         if (!currentDesignId && !designName.trim()) {
             setSaveNameInput('');
             setIsSaveNameModalOpen(true);
@@ -493,7 +668,6 @@ export default function DesignerWorkspace() {
         await executeSave(name);
     };
 
-    // ✅ UPDATED: persist wall/floor colour + shade level
     const executeSave = async (name: string) => {
         const safeName = name || 'Untitled Room';
         setIsSaving(true);
@@ -502,9 +676,13 @@ export default function DesignerWorkspace() {
                 name: safeName,
                 roomType: selectedRoomId,
                 furniture: placedItems,
-                wallColor: effectiveWallColor,   // ✅
-                floorColor: effectiveFloorColor, // ✅
-                shadeLevel,                      // ✅
+                wallColor: effectiveWallColor,
+                floorColor: effectiveFloorColor,
+                wallTexture,
+                lightingMode,
+                customWidth: effectiveWidth,
+                customDepth: effectiveDepth,
+                lightPos,
             };
 
             if (currentDesignId) {
@@ -517,23 +695,37 @@ export default function DesignerWorkspace() {
 
             const user = getUser();
             if (user?.id) {
-                const supaPayload = {
+                const payload = {
                     user_id: user.id,
                     name: safeName,
                     room_type: selectedRoomId,
                     furniture_layout: placedItems,
-                    wall_color: effectiveWallColor,   // ✅
-                    floor_color: effectiveFloorColor, // ✅
-                    shade_level: shadeLevel,          // ✅
+                    wall_color: effectiveWallColor,
+                    floor_color: effectiveFloorColor,
+                    wall_texture: wallTexture,
+                    lighting_mode: lightingMode,
+                    custom_width: effectiveWidth,
+                    custom_depth: effectiveDepth,
+                    // Requires: ALTER TABLE saved_designs ADD COLUMN light_pos_x float DEFAULT 5, ADD COLUMN light_pos_y float DEFAULT 8, ADD COLUMN light_pos_z float DEFAULT 5;
+                    light_pos_x: lightPos.x,
+                    light_pos_y: lightPos.y,
+                    light_pos_z: lightPos.z,
                 };
-
-                if (currentDesignId) {
-                    supabase.from('saved_designs').update(supaPayload).eq('id', currentDesignId).then(() => { });
+                if (currentDesignId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentDesignId)) {
+                    await supabase.from('saved_designs').update(payload).eq('id', currentDesignId);
                 } else {
-                    supabase.from('saved_designs').insert(supaPayload).then(() => { });
+                    const { data, error } = await supabase.from('saved_designs').insert(payload).select('id').single();
+                    if (!error && data?.id) {
+                        const newId = data.id;
+                        // Migrate local storage
+                        if (currentDesignId) {
+                            migrateDesignId(currentDesignId, newId);
+                        }
+                        setCurrentDesignId(newId);
+                        setSearchParams({ designId: newId });
+                    }
                 }
             }
-
             showToastMessage('Design saved successfully!');
         } catch (err) {
             console.error('Save failed:', err);
@@ -543,10 +735,11 @@ export default function DesignerWorkspace() {
         }
     };
 
+    // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="min-h-screen bg-cream flex flex-col h-screen overflow-hidden">
 
-            {/* ─── Delete Confirm Dialog ─── */}
+            {/* ── Delete confirm ── */}
             <ConfirmDialog
                 open={isDeleteConfirmOpen}
                 title="Remove Item"
@@ -555,7 +748,7 @@ export default function DesignerWorkspace() {
                 onCancel={() => setIsDeleteConfirmOpen(false)}
             />
 
-            {/* ─── Top Header Bar ─── */}
+            {/* ── Header ── */}
             <motion.header
                 initial={{ y: -60, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -564,7 +757,7 @@ export default function DesignerWorkspace() {
             >
                 <div className="mx-auto px-6 lg:px-8 py-3.5 flex items-center justify-between">
 
-                    {/* Left: Back + Design Name */}
+                    {/* Left */}
                     <div className="flex items-center gap-5">
                         <button
                             type="button"
@@ -574,9 +767,7 @@ export default function DesignerWorkspace() {
                             <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
                             Back
                         </button>
-
                         <div className="w-px h-7 bg-stone-light" />
-
                         <div>
                             {isEditingName ? (
                                 <input
@@ -594,9 +785,7 @@ export default function DesignerWorkspace() {
                                     title="Click to rename"
                                 >
                                     {designName || 'Untitled Room'}
-                                    <span className="text-[9px] text-charcoal/20 group-hover:text-sage font-sans uppercase tracking-[0.15em] transition-colors duration-300">
-                                        rename
-                                    </span>
+                                    <span className="text-[9px] text-charcoal/20 group-hover:text-sage font-sans uppercase tracking-[0.15em] transition-colors duration-300">rename</span>
                                 </button>
                             )}
                             <p className="text-[10px] text-charcoal/35 uppercase tracking-[0.2em] mt-0.5 font-medium">
@@ -605,85 +794,54 @@ export default function DesignerWorkspace() {
                         </div>
                     </div>
 
-                    {/* Center: View Toggle */}
+                    {/* Center: view toggle */}
                     <div className="flex items-center bg-stone-light/30 border border-stone-light/60 p-1 rounded-lg">
-                        <button
-                            onClick={() => setViewMode('2d')}
-                            className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '2d'
-                                ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
-                                : 'text-charcoal/45 hover:text-charcoal border border-transparent'
-                                }`}
-                        >
-                            <LayoutTemplate size={14} strokeWidth={1.5} />
-                            2D Plan
-                        </button>
-                        <button
-                            onClick={() => setViewMode('3d')}
-                            className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === '3d'
-                                ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
-                                : 'text-charcoal/45 hover:text-charcoal border border-transparent'
-                                }`}
-                        >
-                            <BoxIcon size={14} strokeWidth={1.5} />
-                            3D View
-                        </button>
+                        {(['2d', '3d'] as const).map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                className={`px-5 py-2 rounded-md text-[11px] tracking-[0.1em] uppercase font-medium flex items-center gap-2 transition-all duration-300 ${viewMode === mode
+                                        ? 'bg-white shadow-sm text-charcoal border border-stone-light/50'
+                                        : 'text-charcoal/45 hover:text-charcoal border border-transparent'
+                                    }`}
+                            >
+                                {mode === '2d' ? <LayoutTemplate size={14} strokeWidth={1.5} /> : <BoxIcon size={14} strokeWidth={1.5} />}
+                                {mode === '2d' ? '2D Plan' : '3D View'}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Right: Actions */}
+                    {/* Right: actions */}
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1.5 mr-2">
-                            <button
-                                onClick={handleUndo}
-                                disabled={historyIndex <= 0}
-                                className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Undo (Ctrl+Z)"
-                            >
-                                <Undo2 size={16} strokeWidth={1.5} />
-                            </button>
-                            <button
-                                onClick={handleRedo}
-                                disabled={historyIndex >= history.length - 1}
-                                className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Redo (Ctrl+Y)"
-                            >
-                                <Redo2 size={16} strokeWidth={1.5} />
-                            </button>
+                            <button onClick={handleUndo} disabled={historyIndex <= 0}
+                                className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                title="Undo"><Undo2 size={16} strokeWidth={1.5} /></button>
+                            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1}
+                                className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                title="Redo"><Redo2 size={16} strokeWidth={1.5} /></button>
                         </div>
                         <div className="w-px h-6 bg-stone-light mr-1" />
-                        <button
-                            onClick={handleResetCamera}
-                            className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 mr-2"
-                            title="Reset Camera"
-                        >
+                        <button onClick={handleResetCamera} title="Reset Camera"
+                            className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 mr-2">
                             <CameraIcon size={16} strokeWidth={1.5} />
                         </button>
-                        <button
-                            onClick={handleExportImage}
+                        <button onClick={handleExportImage} title="Export as PNG"
                             className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20
-                                       transition-all duration-300"
-                            title="Export as PNG"
-                        >
+                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
                             <Download size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
                             <span className="hidden sm:inline">Export</span>
                         </button>
-                        <button
-                            onClick={handleCreateNew}
+                        <button onClick={handleCreateNew}
                             className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20
-                                       transition-all duration-300"
-                        >
+                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
                             <FilePlus size={14} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-300" />
                             New
                         </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
+                        <button onClick={handleSave} disabled={isSaving}
                             className="group inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       bg-charcoal text-white hover:bg-charcoal-light
-                                       disabled:opacity-40 disabled:cursor-not-allowed
-                                       transition-all duration-300 shadow-sm hover:shadow-md"
-                        >
+                                       bg-charcoal text-white hover:bg-charcoal-light disabled:opacity-40 disabled:cursor-not-allowed
+                                       transition-all duration-300 shadow-sm hover:shadow-md">
                             <Save size={14} strokeWidth={1.5} className={isSaving ? 'animate-pulse' : 'group-hover:scale-110 transition-transform duration-300'} />
                             {isSaving ? 'Saving…' : 'Save Design'}
                         </button>
@@ -691,45 +849,29 @@ export default function DesignerWorkspace() {
                 </div>
             </motion.header>
 
-            {/* ─── New Design Modal ─── */}
+            {/* ── New design modal ── */}
             <AnimatePresence>
                 {isNewDesignModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm"
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm">
+                        <motion.div initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 20 }}
                             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
-                        >
-                            <button onClick={() => setIsNewDesignModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40">
-                                <X size={18} strokeWidth={1.5} />
-                            </button>
+                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50">
+                            <button onClick={() => setIsNewDesignModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"><X size={18} strokeWidth={1.5} /></button>
                             <div className="mb-8">
                                 <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Start Fresh</p>
                                 <h3 className="text-3xl font-serif text-charcoal">New <span className="italic">Design</span></h3>
                             </div>
                             <form onSubmit={(e) => { e.preventDefault(); confirmCreateNew(); }}>
                                 <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">Design Name</label>
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    value={newDesignName}
-                                    onChange={(e) => setNewDesignName(e.target.value)}
+                                <input type="text" autoFocus value={newDesignName} onChange={(e) => setNewDesignName(e.target.value)}
                                     placeholder="e.g. My Living Room"
                                     className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
-                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
-                                />
+                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8" />
                                 <div className="flex justify-end gap-3">
                                     <button type="button" onClick={() => setIsNewDesignModalOpen(false)} className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">Cancel</button>
                                     <button type="submit" className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md inline-flex items-center gap-2">
-                                        <Plus size={14} strokeWidth={2} />
-                                        Create Design
+                                        <Plus size={14} strokeWidth={2} />Create Design
                                     </button>
                                 </div>
                             </form>
@@ -738,45 +880,29 @@ export default function DesignerWorkspace() {
                 )}
             </AnimatePresence>
 
-            {/* ─── Save Name Modal ─── */}
+            {/* ── Save name modal ── */}
             <AnimatePresence>
                 {isSaveNameModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm"
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm">
+                        <motion.div initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 20 }}
                             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
-                        >
-                            <button onClick={() => setIsSaveNameModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40">
-                                <X size={18} strokeWidth={1.5} />
-                            </button>
+                            className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50">
+                            <button onClick={() => setIsSaveNameModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"><X size={18} strokeWidth={1.5} /></button>
                             <div className="mb-8">
                                 <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Save Your Work</p>
                                 <h3 className="text-3xl font-serif text-charcoal">Name Your <span className="italic">Design</span></h3>
                             </div>
                             <form onSubmit={(e) => { e.preventDefault(); confirmSaveWithName(); }}>
                                 <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">Design Name</label>
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    value={saveNameInput}
-                                    onChange={(e) => setSaveNameInput(e.target.value)}
+                                <input type="text" autoFocus value={saveNameInput} onChange={(e) => setSaveNameInput(e.target.value)}
                                     placeholder="e.g. My Living Room"
                                     className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
-                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
-                                />
+                                               focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8" />
                                 <div className="flex justify-end gap-3">
                                     <button type="button" onClick={() => setIsSaveNameModalOpen(false)} className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">Cancel</button>
                                     <button type="submit" className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md inline-flex items-center gap-2">
-                                        <Save size={14} strokeWidth={1.5} />
-                                        Save Design
+                                        <Save size={14} strokeWidth={1.5} />Save Design
                                     </button>
                                 </div>
                             </form>
@@ -785,316 +911,359 @@ export default function DesignerWorkspace() {
                 )}
             </AnimatePresence>
 
-            {/* ─── Main Content ─── */}
+            {/* ── Main content ── */}
             <main className="flex-1 flex overflow-hidden">
 
-                {/* ─── Left Sidebar ─── */}
+                {/* ── Sidebar ── */}
                 <motion.aside
                     initial={{ x: -40, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-                    className="w-72 border-r border-stone-light bg-warm-white/80 backdrop-blur-sm flex flex-col h-full z-10 shadow-sm"
+                    className="w-80 border-r border-stone-light bg-warm-white/80 backdrop-blur-sm flex flex-col h-full z-10 shadow-sm overflow-hidden"
                 >
-                    {/* ─ Room Selector ─ */}
-                    <div className="p-5 border-b border-stone-light/70">
-                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Room Type</p>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            {ROOMS.map((room) => (
-                                <button
-                                    key={room.id}
-                                    onClick={() => setSelectedRoomId(room.id)}
-                                    className={`px-3 py-2 rounded-lg text-[11px] tracking-wide font-medium transition-all duration-300
-                                        ${selectedRoomId === room.id
-                                            ? 'bg-sage/15 text-sage-dark border border-sage/30'
-                                            : 'text-charcoal/50 border border-transparent hover:bg-stone-light/40 hover:text-charcoal/70'
-                                        }`}
+                    {/* ─ Sidebar Tabs ─ */}
+                    <div className="flex border-b border-stone-light/70 bg-stone-light/10">
+                        {(['room', 'furniture'] as const).map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => setSidebarMode(mode)}
+                                className={`flex-1 py-4 text-[10px] tracking-[0.2em] uppercase font-bold transition-all duration-300 relative
+                                    ${sidebarMode === mode ? 'text-charcoal' : 'text-charcoal/30 hover:text-charcoal/50'}`}
+                            >
+                                {mode}
+                                {sidebarMode === mode && (
+                                    <motion.div
+                                        layoutId="sidebarTab"
+                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-sage"
+                                    />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Scrollable container */}
+                    <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-light scrollbar-track-transparent">
+                        <AnimatePresence mode="wait">
+                            {sidebarMode === 'room' ? (
+                                <motion.div
+                                    key="room"
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex flex-col pb-8"
                                 >
-                                    {room.name}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* ✅ NEW: Wall Colour Picker */}
-                        <div className="flex flex-col gap-3 pt-3 border-t border-stone-light/50">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-charcoal/55">
-                                    <Paintbrush size={13} strokeWidth={1.5} />
-                                    <span className="text-[11px] tracking-wide font-medium">Wall Colour</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-charcoal/35 font-mono">{effectiveWallColor}</span>
-                                    <input
-                                        type="color"
-                                        value={effectiveWallColor}
-                                        onChange={(e) => setCustomWallColor(e.target.value)}
-                                        className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5"
-                                        title="Pick wall colour"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* ✅ NEW: Floor Colour Picker */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-charcoal/55">
-                                    <GridIcon size={13} strokeWidth={1.5} />
-                                    <span className="text-[11px] tracking-wide font-medium">Floor Colour</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-charcoal/35 font-mono">{effectiveFloorColor}</span>
-                                    <input
-                                        type="color"
-                                        value={effectiveFloorColor}
-                                        onChange={(e) => setCustomFloorColor(e.target.value)}
-                                        className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5"
-                                        title="Pick floor colour"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* ✅ NEW: Shading Overlay */}
-                            <div className="flex flex-col gap-2 pt-1">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-charcoal/55">
-                                        <Sun size={13} strokeWidth={1.5} />
-                                        <span className="text-[11px] tracking-wide font-medium">Room Shading</span>
+                                    {/* ─ Room type ─ */}
+                                    <div className="p-5 border-b border-stone-light/70">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Room Type</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {ROOMS.map((room) => (
+                                                <button key={room.id} onClick={() => setSelectedRoomId(room.id)}
+                                                    className={`px-3 py-2 rounded-lg text-[11px] tracking-wide font-medium transition-all duration-300
+                                                        ${selectedRoomId === room.id
+                                                            ? 'bg-sage/15 text-sage-dark border border-sage/30'
+                                                            : 'text-charcoal/50 border border-transparent hover:bg-stone-light/40 hover:text-charcoal/70'}`}>
+                                                    {room.name}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
-                                        {Math.round(shadeLevel * 100)}%
-                                    </span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="80"
-                                    step="5"
-                                    value={shadeLevel * 100}
-                                    onChange={(e) => setShadeLevel(parseFloat(e.target.value) / 100)}
-                                    className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-charcoal"
-                                />
-                                <p className="text-[9px] text-charcoal/30 tracking-wide">
-                                    Simulates room lighting / ambiance
-                                </p>
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* ─ Tools ─ */}
-                    <div className="p-5 border-b border-stone-light/70">
-                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Transform</p>
-                        <div className="flex gap-2 mb-3">
-                            <button
-                                onClick={() => setTransformMode('translate')}
-                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300
-                                    ${transformMode === 'translate'
-                                        ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
-                                        : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
-                                    }`}
-                            >
-                                <Move size={18} strokeWidth={1.5} className="mb-1.5" />
-                                <span className="text-[10px] tracking-wide font-medium uppercase">Move</span>
-                            </button>
-                            <button
-                                onClick={() => setTransformMode('rotate')}
-                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300
-                                    ${transformMode === 'rotate'
-                                        ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
-                                        : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
-                                    }`}
-                            >
-                                <RotateCw size={18} strokeWidth={1.5} className="mb-1.5" />
-                                <span className="text-[10px] tracking-wide font-medium uppercase">Rotate</span>
-                            </button>
-                        </div>
+                                    {/* ─ Colours ─ */}
+                                    <div className="p-5 border-b border-stone-light/70 flex flex-col gap-3">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Colours</p>
 
-                        <div className="flex items-center justify-between px-2 mt-4 bg-stone-light/20 py-2 rounded-lg border border-stone-light/40">
-                            <div className="flex items-center gap-2 text-charcoal/60">
-                                <GridIcon size={14} strokeWidth={1.5} />
-                                <span className="text-[11px] tracking-wide font-medium">Snap to Grid</span>
-                            </div>
-                            <button
-                                onClick={() => setSnapToGrid(!snapToGrid)}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none ${snapToGrid ? 'bg-sage' : 'bg-stone-light/60'}`}
-                            >
-                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${snapToGrid ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-                    </div>
+                                        {/* Wall */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-charcoal/55">
+                                                <Paintbrush size={13} strokeWidth={1.5} />
+                                                <span className="text-[11px] tracking-wide font-medium">Wall</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-charcoal/35 font-mono">{effectiveWallColor}</span>
+                                                <input type="color" value={effectiveWallColor} onChange={(e) => setCustomWallColor(e.target.value)}
+                                                    className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5" title="Wall colour" />
+                                            </div>
+                                        </div>
 
-                    {/* ─ Catalog ─ */}
-                    <div className="p-5 flex-1 overflow-y-auto scrollbar-none">
-                        <div className="flex items-center justify-between mb-4">
-                            <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Furniture</p>
-                            <div className="flex items-center gap-1.5 text-[9px] tracking-wider uppercase text-charcoal/25">
-                                <Armchair size={10} strokeWidth={1.5} />
-                                {CATALOG.length} items
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2.5">
-                            {CATALOG.map((item) => (
-                                <motion.button
-                                    key={item.name}
-                                    whileHover={{ scale: 1.03 }}
-                                    whileTap={{ scale: 0.97 }}
-                                    onClick={() => addItem(item)}
-                                    className="aspect-square flex flex-col items-center justify-center
-                                               bg-cream/60 border border-stone-light/50 rounded-xl
-                                               hover:border-sage/40 hover:bg-sage/5
-                                               transition-colors duration-300 group cursor-pointer"
+                                        {/* Floor */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-charcoal/55">
+                                                <GridIcon size={13} strokeWidth={1.5} />
+                                                <span className="text-[11px] tracking-wide font-medium">Floor</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-charcoal/35 font-mono">{effectiveFloorColor}</span>
+                                                <input type="color" value={effectiveFloorColor} onChange={(e) => setCustomFloorColor(e.target.value)}
+                                                    className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5" title="Floor colour" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ─ Wall texture ─ */}
+                                    <div className="p-5 border-b border-stone-light/70">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Wall Texture</p>
+                                        <div className="grid grid-cols-5 gap-2">
+                                            {(['plain', 'subtle-linen', 'brick', 'wood-panel', 'concrete'] as WallTexture[]).map((tex) => (
+                                                <button key={tex} onClick={() => setWallTexture(tex)}
+                                                    className={`aspect-square rounded-md border-2 transition-all duration-200 flex items-center justify-center overflow-hidden
+                                                        ${wallTexture === tex ? 'border-sage ring-2 ring-sage/10' : 'border-stone-light hover:border-charcoal/20'}`}
+                                                    title={tex.replace('-', ' ')}>
+                                                    <div className="w-full h-full" style={{
+                                                        backgroundColor: effectiveWallColor,
+                                                        backgroundImage:
+                                                            tex === 'subtle-linen'
+                                                                ? 'repeating-linear-gradient(rgba(0,0,0,0.1) 0 1px,transparent 0 4px),repeating-linear-gradient(90deg,rgba(0,0,0,0.1) 0 1px,transparent 0 4px)'
+                                                                : tex === 'brick'
+                                                                    ? 'repeating-linear-gradient(rgba(0,0,0,0.14) 0 2px,transparent 0 22px),repeating-linear-gradient(90deg,rgba(0,0,0,0.1) 0 2px,transparent 0 58px)'
+                                                                    : tex === 'wood-panel'
+                                                                        ? 'repeating-linear-gradient(90deg,rgba(0,0,0,0.13) 0 2px,transparent 0 30px)'
+                                                                        : tex === 'concrete'
+                                                                            ? 'radial-gradient(rgba(0,0,0,0.12) 1px,transparent 0)'
+                                                                            : 'none',
+                                                        backgroundSize: tex === 'concrete' ? '5px 5px' : 'auto',
+                                                    }} />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ─ Lighting mode ─ */}
+                                    <div className="p-5 border-b border-stone-light/70">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Lighting</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(Object.keys(LIGHTING_PRESETS) as LightingMode[]).map((mode) => (
+                                                <button key={mode} onClick={() => setLightingMode(mode)}
+                                                    className={`px-3 py-1.5 rounded-lg text-[10px] tracking-wide capitalize font-medium transition-all duration-200 border
+                                                        ${lightingMode === mode
+                                                            ? 'bg-charcoal text-white border-charcoal'
+                                                            : 'text-charcoal/50 border-stone-light hover:border-charcoal/30 hover:text-charcoal/70'}`}>
+                                                    {mode}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ─ Light source position ─ */}
+                                    <div className="p-5 border-b border-stone-light/70">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Light Source</p>
+
+                                        {/* Top-view XZ picker */}
+                                        <div
+                                            className="relative w-full bg-stone-light/20 rounded-xl border border-stone-light mb-2 overflow-hidden cursor-crosshair select-none"
+                                            style={{ height: 88 }}
+                                            onClick={(e) => {
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1; // −1…1
+                                                const nz = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+                                                setLightPos((p: LightPos) => ({ ...p, x: nx * 8, z: nz * 8 }));
+                                            }}
+                                        >
+                                            <div className="absolute inset-4 border border-stone-light/50 rounded-sm opacity-60" />
+                                            <span className="absolute top-1.5 left-2.5 text-[8px] text-charcoal/30 tracking-widest uppercase">Top View</span>
+                                            <div
+                                                className="absolute w-4 h-4 rounded-full border-2 border-amber-300 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                                                style={{
+                                                    left: `${((lightPos.x / 8) + 1) / 2 * 100}%`,
+                                                    top: `${((lightPos.z / 8) + 1) / 2 * 100}%`,
+                                                    background: 'radial-gradient(circle at 40% 35%, #fde68a, #f59e0b)',
+                                                    boxShadow: '0 0 10px 3px rgba(251,191,36,0.5)',
+                                                }}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <div className="flex items-center gap-2 text-charcoal/55">
+                                                <Sun size={13} strokeWidth={1.5} />
+                                                <span className="text-[11px] tracking-wide font-medium">Height</span>
+                                            </div>
+                                            <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
+                                                {lightPos.y.toFixed(1)} m
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range" min="2" max="15" step="0.5" value={lightPos.y}
+                                            onChange={(e) => setLightPos((p: LightPos) => ({ ...p, y: parseFloat(e.target.value) }))}
+                                            className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                                        />
+                                    </div>
+
+                                    <div className="p-5">
+                                        <button
+                                            onClick={() => setSidebarMode('furniture')}
+                                            className="w-full bg-charcoal text-white py-4 rounded-xl text-[11px] tracking-[0.2em] uppercase font-bold hover:bg-charcoal-light transition-all duration-300 shadow-lg flex items-center justify-center gap-3 group"
+                                        >
+                                            Step 2: Add Furniture
+                                            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="furniture"
+                                    initial={{ opacity: 0, x: 10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex flex-col h-full"
                                 >
-                                    <img
-                                        src={`/furniture-icons/${item.type}.png`}
-                                        alt={item.name}
-                                        className="w-12 h-12 object-contain mb-2.5 transition-transform duration-200 group-hover:scale-105"
-                                    />
-                                    <span className="text-[10px] font-medium text-charcoal/55 group-hover:text-charcoal/80 tracking-wide transition-colors duration-300">
-                                        {item.name}
-                                    </span>
-                                </motion.button>
-                            ))}
-                        </div>
+                                    {/* ─ Transform Tools ─ */}
+                                    <div className="p-5 border-b border-stone-light/70">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Arrange</p>
+                                            <button
+                                                onClick={() => setSidebarMode('room')}
+                                                className="text-[9px] text-sage font-bold tracking-widest uppercase hover:underline"
+                                            >
+                                                ← Back to Setup
+                                            </button>
+                                        </div>
+                                        <div className="flex gap-2 mb-3">
+                                            {([
+                                                { mode: 'translate' as const, icon: Move, label: 'Drag to Move' },
+                                                { mode: 'rotate' as const, icon: RotateCw, label: 'Drag to Rotate' },
+                                            ]).map(({ mode, icon: Icon, label }) => (
+                                                <button key={mode} onClick={() => setTransformMode(mode)}
+                                                    className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300
+                                                        ${transformMode === mode
+                                                            ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
+                                                            : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'}`}>
+                                                    <Icon size={18} strokeWidth={1.5} className="mb-1.5" />
+                                                    <span className="text-[10px] tracking-wide font-medium uppercase text-center">{label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center justify-between px-2 py-2 bg-stone-light/20 rounded-lg border border-stone-light/40">
+                                            <div className="flex items-center gap-2 text-charcoal/60">
+                                                <GridIcon size={14} strokeWidth={1.5} />
+                                                <span className="text-[11px] tracking-wide font-medium">Snap to Grid</span>
+                                            </div>
+                                            <button onClick={() => setSnapToGrid(!snapToGrid)}
+                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 ${snapToGrid ? 'bg-sage' : 'bg-stone-light/60'}`}>
+                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${snapToGrid ? 'translate-x-4.5' : 'translate-x-1'}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* ─ Catalog ─ */}
+                                    <div className="p-5 flex flex-col gap-4">
+                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-medium">Furniture Catalog</p>
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            {CATALOG.map((item) => (
+                                                <motion.button
+                                                    key={item.name}
+                                                    whileHover={{ scale: 1.03 }}
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={() => addItem(item)}
+                                                    className="aspect-square flex flex-col items-center justify-center
+                                                               bg-cream/60 border border-stone-light/50 rounded-xl
+                                                               hover:border-sage/40 hover:bg-sage/5
+                                                               transition-colors duration-300 group cursor-pointer"
+                                                >
+                                                    <img src={'/furniture-icons/' + item.type + '.png'} alt={item.name}
+                                                        className="w-12 h-12 object-contain mb-2.5 transition-transform duration-200 group-hover:scale-105" />
+                                                    <span className="text-[10px] font-medium text-charcoal/55 group-hover:text-charcoal/80 tracking-wide transition-colors duration-300">
+                                                        {item.name}
+                                                    </span>
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
 
-                    {/* ─ Selected Item Actions ─ */}
+                    {/* ─ Selected Item Sticky Footer ─ */}
                     <AnimatePresence>
-                        {selectedItem && (
+                        {sidebarMode === 'furniture' && selectedItem && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.25 }}
-                                className="border-t border-stone-light/70 bg-white/50 backdrop-blur-md overflow-y-auto max-h-[50vh] scrollbar-thin scrollbar-thumb-stone-light scrollbar-track-transparent"
+                                className="border-t border-stone-light/70 bg-white shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)] z-20"
                             >
                                 <div className="p-5 flex flex-col gap-4">
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-bold">Selected Item</p>
-                                        <span className="text-lg font-serif text-charcoal">{selectedItem.name}</span>
-                                    </div>
-
-                                    {/* ✅ NEW: Furniture Colour Picker */}
-                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm">
-                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium mb-3">Item Colour</p>
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="color"
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex flex-col">
+                                            <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-bold">Selected Item</p>
+                                            <span className="text-base font-serif text-charcoal leading-tight">{selectedItem.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-stone-light/10 p-1.5 rounded-lg border border-stone-light/30">
+                                            <input type="color"
                                                 value={selectedItem.color ?? getDefaultColorForType(selectedItem.type)}
                                                 onChange={(e) => updateItem(selectedItem.id, { color: e.target.value })}
-                                                className="w-10 h-10 rounded-lg border border-stone-light cursor-pointer bg-transparent p-0.5 flex-shrink-0"
-                                                title="Change furniture colour"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="text-[11px] text-charcoal/60 font-mono mb-1">
-                                                    {selectedItem.color ?? getDefaultColorForType(selectedItem.type)}
-                                                </p>
-                                                <div className="flex gap-1.5 flex-wrap">
-                                                    {['#8B7355', '#A0522D', '#BC8F8F', '#DEB887', '#8DA399', '#4A4A4A', '#F5F0EA', '#C9A87C'].map(c => (
-                                                        <button
-                                                            key={c}
-                                                            onClick={() => updateItem(selectedItem.id, { color: c })}
-                                                            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
-                                                            style={{
-                                                                background: c,
-                                                                borderColor: selectedItem.color === c ? '#1A1A1A' : 'transparent'
-                                                            }}
-                                                            title={c}
-                                                        />
-                                                    ))}
-                                                </div>
+                                                className="w-5 h-5 rounded-sm border border-stone-light cursor-pointer bg-transparent p-0" />
+                                            <span className="text-[9px] font-mono text-charcoal/40 uppercase">Colour</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <button onClick={duplicateItem}
+                                            className="flex-1 py-2 rounded-lg text-[10px] tracking-[0.05em] uppercase font-bold text-charcoal bg-white border border-stone-light shadow-sm hover:bg-stone-light/20 transition-all flex items-center justify-center gap-1.5">
+                                            <Copy size={12} strokeWidth={2} />Duplicate
+                                        </button>
+                                        <button onClick={deleteSelected}
+                                            className="flex-1 py-2 rounded-lg text-[10px] tracking-[0.05em] uppercase font-bold text-white bg-red-400 border border-red-500/50 shadow-sm hover:bg-red-500 transition-all flex items-center justify-center gap-1.5">
+                                            <Trash2 size={12} strokeWidth={2} />Delete
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 border-t border-stone-light/30 pt-4">
+                                        {/* Rotation */}
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">Rotation</span>
+                                                <span className="text-[9px] bg-stone-light/30 px-1 py-0.5 rounded text-charcoal font-medium">
+                                                    {Math.round((selectedItem.rotation[1] * 180) / Math.PI)}°
+                                                </span>
                                             </div>
+                                            <input type="range" min="0" max="360" step={snapToGrid ? 45 : 1}
+                                                value={(selectedItem.rotation[1] * 180) / Math.PI}
+                                                onChange={(e) => updateItem(selectedItem.id, {
+                                                    rotation: [0, (parseFloat(e.target.value) * Math.PI) / 180, 0]
+                                                })}
+                                                className="w-full h-1 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage" />
                                         </div>
-                                    </div>
 
-                                    {/* Position Controls */}
-                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-2">
-                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Position</p>
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 flex items-center bg-stone-light/15 rounded-lg border border-stone-light/40 overflow-hidden focus-within:border-sage/60 focus-within:ring-1 focus-within:ring-sage/20 transition-all">
-                                                <span className="text-[10px] font-bold text-charcoal/40 px-2.5 bg-stone-light/20 h-full flex items-center border-r border-stone-light/40">X</span>
-                                                <input
-                                                    type="number"
-                                                    value={selectedItem.position[0].toFixed(2)}
-                                                    onChange={(e) => updateItem(selectedItem.id, { position: [parseFloat(e.target.value) || 0, selectedItem.position[1], selectedItem.position[2]] })}
-                                                    step={snapToGrid ? 0.5 : 0.1}
-                                                    className="w-full text-xs text-charcoal bg-transparent px-2 py-1.5 outline-none"
-                                                />
+                                        {/* Size */}
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">Size</span>
+                                                <span className="text-[9px] bg-stone-light/30 px-1 py-0.5 rounded text-charcoal font-medium">
+                                                    {Math.round((selectedItem.scale?.[0] ?? 1) * 100)}%
+                                                </span>
                                             </div>
-                                            <div className="flex-1 flex items-center bg-stone-light/15 rounded-lg border border-stone-light/40 overflow-hidden focus-within:border-sage/60 focus-within:ring-1 focus-within:ring-sage/20 transition-all">
-                                                <span className="text-[10px] font-bold text-charcoal/40 px-2.5 bg-stone-light/20 h-full flex items-center border-r border-stone-light/40">Z</span>
-                                                <input
-                                                    type="number"
-                                                    value={selectedItem.position[2].toFixed(2)}
-                                                    onChange={(e) => updateItem(selectedItem.id, { position: [selectedItem.position[0], selectedItem.position[1], parseFloat(e.target.value) || 0] })}
-                                                    step={snapToGrid ? 0.5 : 0.1}
-                                                    className="w-full text-xs text-charcoal bg-transparent px-2 py-1.5 outline-none"
-                                                />
-                                            </div>
+                                            <input type="range" min="20" max="200" step={5}
+                                                value={(selectedItem.scale?.[0] ?? 1) * 100}
+                                                onChange={(e) => {
+                                                    const s = parseFloat(e.target.value) / 100;
+                                                    updateItem(selectedItem.id, { scale: [s, s, s] });
+                                                }}
+                                                className="w-full h-1 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage" />
                                         </div>
                                     </div>
 
-                                    {/* Rotation Control */}
-                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-3">
-                                        <div className="flex justify-between items-center">
-                                            <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Rotation</p>
-                                            <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
-                                                {Math.round((selectedItem.rotation[1] * 180) / Math.PI)}°
-                                            </span>
+                                    {/* Position Inputs */}
+                                    <div className="flex gap-3 pt-1">
+                                        <div className="flex-1 flex flex-col gap-1">
+                                            <span className="text-[9px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Pos X (m)</span>
+                                            <input type="number" step="0.1"
+                                                value={Math.round(selectedItem.position[0] * 100) / 100}
+                                                onChange={(e) => updateItem(selectedItem.id, {
+                                                    position: [parseFloat(e.target.value) || 0, selectedItem.position[1], selectedItem.position[2]]
+                                                })}
+                                                className="w-full bg-stone-light/10 border border-stone-light/30 rounded px-2 py-1 text-[11px] text-charcoal focus:outline-none focus:border-sage" />
                                         </div>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="360"
-                                            step={snapToGrid ? 45 : 1}
-                                            value={(selectedItem.rotation[1] * 180) / Math.PI}
-                                            onChange={(e) => updateItem(selectedItem.id, { rotation: [selectedItem.rotation[0], (parseFloat(e.target.value) * Math.PI) / 180, selectedItem.rotation[2]] })}
-                                            className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage"
-                                        />
-                                    </div>
-
-                                    {/* Size Control */}
-                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm flex flex-col gap-3">
-                                        <div className="flex justify-between items-center">
-                                            <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium">Size</p>
-                                            <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
-                                                {Math.round((selectedItem.scale?.[0] || 1) * 100)}%
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="20"
-                                            max="200"
-                                            step={5}
-                                            value={(selectedItem.scale?.[0] || 1) * 100}
-                                            onChange={(e) => {
-                                                const s = parseFloat(e.target.value) / 100;
-                                                updateItem(selectedItem.id, { scale: [s, s, s] });
-                                            }}
-                                            className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-sage"
-                                        />
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex flex-col gap-2 pt-2 border-t border-stone-light/50">
-                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/40 font-medium mb-1">Actions</p>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={duplicateItem}
-                                                className="flex-1 py-2.5 rounded-lg text-[11px] tracking-[0.05em] uppercase font-medium
-                                                           text-charcoal bg-white border border-stone-light shadow-sm
-                                                           hover:bg-stone-light/20 hover:border-charcoal/30
-                                                           transition-all duration-300 flex items-center justify-center gap-1.5"
-                                            >
-                                                <Copy size={13} strokeWidth={1.5} />
-                                                Duplicate
-                                            </button>
-                                            <button
-                                                onClick={deleteSelected}
-                                                className="flex-1 py-2.5 rounded-lg text-[11px] tracking-[0.05em] uppercase font-medium
-                                                           text-white bg-red-400 border border-red-500/50 shadow-sm
-                                                           hover:bg-red-500 hover:shadow-md hover:-translate-y-0.5
-                                                           transition-all duration-300 flex items-center justify-center gap-1.5"
-                                            >
-                                                <Trash2 size={13} strokeWidth={1.5} className="opacity-80" />
-                                                Delete
-                                            </button>
+                                        <div className="flex-1 flex flex-col gap-1">
+                                            <span className="text-[9px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Pos Z (m)</span>
+                                            <input type="number" step="0.1"
+                                                value={Math.round(selectedItem.position[2] * 100) / 100}
+                                                onChange={(e) => updateItem(selectedItem.id, {
+                                                    position: [selectedItem.position[0], selectedItem.position[1], parseFloat(e.target.value) || 0]
+                                                })}
+                                                className="w-full bg-stone-light/10 border border-stone-light/30 rounded px-2 py-1 text-[11px] text-charcoal focus:outline-none focus:border-sage" />
                                         </div>
                                     </div>
                                 </div>
@@ -1103,15 +1272,22 @@ export default function DesignerWorkspace() {
                     </AnimatePresence>
                 </motion.aside>
 
-                {/* ─── Canvas Area ─── */}
+                {/* ── Canvas area ── */}
                 <section className="flex-1 relative bg-stone-light/15">
-                    {/* Item Count Badge */}
+                    {selectedId && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10
+                                        bg-charcoal/70 text-white text-[10px] tracking-[0.15em] uppercase
+                                        px-4 py-2 rounded-full backdrop-blur-sm pointer-events-none text-center">
+                            {transformMode === 'translate' ? 'Drag item to move' : 'Drag amber ring to rotate'}
+                        </div>
+                    )}
+
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
                         className="absolute top-4 left-4 z-10 bg-warm-white/80 backdrop-blur-sm border border-stone-light/50 rounded-lg px-4 py-2
-                                   flex items-center gap-2.5 shadow-sm"
+                                   flex items-center gap-2.5 shadow-sm pointer-events-none"
                     >
                         <Armchair size={14} strokeWidth={1.5} className="text-charcoal/40" />
                         <span className="text-[10px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">
@@ -1119,22 +1295,22 @@ export default function DesignerWorkspace() {
                         </span>
                     </motion.div>
 
-                    {/* ✅ FIX: use onCreated to capture gl for export */}
                     <Canvas
-                        shadows
-                        gl={{ preserveDrawingBuffer: true }}
+                        shadows                                     // enables shadow maps
+                        gl={{ preserveDrawingBuffer: true }}        // needed for PNG export
                         onCreated={({ gl }) => { glRef.current = gl; }}
                     >
+                        {/* ── Cameras ── */}
                         {viewMode === '2d' ? (
                             <OrthographicCamera makeDefault position={[0, 10, 0]} zoom={60} near={0.1} far={100} rotation={[-Math.PI / 2, 0, 0]} />
                         ) : (
                             <PerspectiveCamera makeDefault position={[5, 4, 5]} fov={50} />
                         )}
 
-                        <ambientLight intensity={0.6} />
-                        <directionalLight position={[10, 15, 10]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
-                        <Environment preset="city" />
+                        {/* ── Lighting rig ── */}
+                        <LightingRig mode={lightingMode} lightPos={lightPos} />
 
+                        {/* ── 2D grid overlay ── */}
                         {viewMode === '2d' && (
                             <Grid
                                 position={[0, -0.01, 0]}
@@ -1149,14 +1325,18 @@ export default function DesignerWorkspace() {
                             />
                         )}
 
-                        {/* ✅ Pass live colour overrides to room geometry */}
+                        {/* ── Room ── */}
                         <RoomGeometry
-                            room={activeRoom}
+                            width={effectiveWidth}
+                            depth={effectiveDepth}
+                            height={activeRoom.height}
                             wallColor={effectiveWallColor}
                             floorColor={effectiveFloorColor}
+                            wallTexture={wallTexture}
                             onDeselect={() => setSelectedId(null)}
                         />
 
+                        {/* ── Furniture ── */}
                         {placedItems.map((item) => (
                             <Model
                                 key={item.id}
@@ -1170,26 +1350,20 @@ export default function DesignerWorkspace() {
                             />
                         ))}
 
-                        {viewMode === '3d' ? (
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            <OrbitControls ref={orbitControlsRef as any} makeDefault enabled={!isDragging} minPolarAngle={0} maxPolarAngle={Math.PI / 2 - 0.05} />
-                        ) : (
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            <OrbitControls ref={orbitControlsRef as any} makeDefault enabled={!isDragging} enableRotate={false} />
-                        )}
-                    </Canvas>
-
-                    {/* ✅ NEW: Shading overlay rendered on top of canvas */}
-                    {shadeLevel > 0 && (
-                        <div
-                            className="absolute inset-0 pointer-events-none transition-all duration-300"
-                            style={{ background: `rgba(0, 0, 0, ${shadeLevel})` }}
+                        {/* ── Orbit controls ── */}
+                        <OrbitControls
+                            ref={orbitControlsRef}
+                            makeDefault={true}
+                            enabled={!isDragging}
+                            minPolarAngle={0}
+                            maxPolarAngle={viewMode === '3d' ? Math.PI / 2 - 0.05 : 0}
+                            enableRotate={viewMode === '3d'}
                         />
-                    )}
+                    </Canvas>
                 </section>
             </main>
 
-            {/* ─── Toast Notification ─── */}
+            {/* ── Toast ── */}
             <AnimatePresence>
                 {toast && (
                     <motion.div
@@ -1199,11 +1373,8 @@ export default function DesignerWorkspace() {
                         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                         className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none border border-white/5"
                     >
-                        <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
-                            {toast.type === 'success'
-                                ? <Check size={12} strokeWidth={3} />
-                                : <AlertCircle size={12} strokeWidth={3} />
-                            }
+                        <div className={`p-1.5 rounded-full ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
+                            {toast.type === 'success' ? <Check size={12} strokeWidth={3} /> : <AlertCircle size={12} strokeWidth={3} />}
                         </div>
                         <span className="text-[12px] tracking-wide font-medium">{toast.message}</span>
                     </motion.div>

@@ -11,35 +11,36 @@ import { supabase } from '../utils/supabase';
 import type { Product } from '../types';
 
 // Placeholder 3D Chair Component
-function ChairPlaceholder() {
+// Placeholder 3D Chair Component
+function ChairPlaceholder({ materialColor, legFinish }: { materialColor: string, legFinish: string }) {
   return (
     <group position={[0, -0.5, 0]}>
       {/* Seat */}
       <mesh position={[0, 0.5, 0]} castShadow>
         <boxGeometry args={[1.2, 0.2, 1.2]} />
-        <meshStandardMaterial color="#8DA399" roughness={0.7} />
+        <meshStandardMaterial color={materialColor} roughness={0.7} />
       </mesh>
       {/* Backrest */}
       <mesh position={[0, 1.1, -0.5]} castShadow>
         <boxGeometry args={[1.2, 1.0, 0.2]} />
-        <meshStandardMaterial color="#8DA399" roughness={0.7} />
+        <meshStandardMaterial color={materialColor} roughness={0.7} />
       </mesh>
       {/* Legs */}
       <mesh position={[-0.5, 0.25, -0.5]} castShadow>
         <cylinderGeometry args={[0.05, 0.03, 0.5]} />
-        <meshStandardMaterial color="#1A1A1A" roughness={0.8} metalness={0.2} />
+        <meshStandardMaterial color={legFinish} roughness={0.8} metalness={0.2} />
       </mesh>
       <mesh position={[0.5, 0.25, -0.5]} castShadow>
         <cylinderGeometry args={[0.05, 0.03, 0.5]} />
-        <meshStandardMaterial color="#1A1A1A" roughness={0.8} metalness={0.2} />
+        <meshStandardMaterial color={legFinish} roughness={0.8} metalness={0.2} />
       </mesh>
       <mesh position={[-0.5, 0.25, 0.5]} castShadow>
         <cylinderGeometry args={[0.05, 0.03, 0.5]} />
-        <meshStandardMaterial color="#1A1A1A" roughness={0.8} metalness={0.2} />
+        <meshStandardMaterial color={legFinish} roughness={0.8} metalness={0.2} />
       </mesh>
       <mesh position={[0.5, 0.25, 0.5]} castShadow>
         <cylinderGeometry args={[0.05, 0.03, 0.5]} />
-        <meshStandardMaterial color="#1A1A1A" roughness={0.8} metalness={0.2} />
+        <meshStandardMaterial color={legFinish} roughness={0.8} metalness={0.2} />
       </mesh>
     </group>
   );
@@ -82,6 +83,8 @@ export default function ProductPage() {
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [addedAnimation, setAddedAnimation] = useState(false);
+  const [materialColor, setMaterialColor] = useState('#8DA399');
+  const [legFinish, setLegFinish] = useState('#1A1A1A');
   const { addItem } = useCart();
   
   const [dbProduct, setDbProduct] = useState<Product | null>(null);
@@ -208,7 +211,7 @@ export default function ProductPage() {
                         polar={[-0.1, Math.PI / 4]}
                       >
                         <Stage environment="city" intensity={0.5}>
-                          <ChairPlaceholder />
+                          <ChairPlaceholder materialColor={materialColor} legFinish={legFinish} />
                         </Stage>
                       </PresentationControls>
                     </Canvas>
@@ -263,8 +266,57 @@ export default function ProductPage() {
                 {product.priceString}
               </p>
 
-              <div className="prose prose-stone text-charcoal/80 text-balance mb-10">
+              <div className="prose prose-stone text-charcoal/80 text-balance mb-8">
                 <p>{product.description}</p>
+              </div>
+
+              {/* Material Customisation */}
+              <div className="mb-8">
+                <p className="text-[10px] tracking-[0.2em] uppercase text-charcoal/40 font-bold mb-4">Material Colour</p>
+                <div className="flex flex-wrap gap-3 mb-4">
+                  {['#8DA399', '#D4CDC4', '#1A1A1A', '#8B7355', '#BC8F8F'].map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setMaterialColor(color)}
+                      className={`w-10 h-10 rounded-full border-2 transition-all ${materialColor === color ? 'border-charcoal scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 bg-stone-light/20 p-3 rounded-xl border border-stone-light/40">
+                  <input 
+                    type="color" 
+                    value={materialColor}
+                    onChange={(e) => setMaterialColor(e.target.value)}
+                    className="w-8 h-8 rounded-full border-2 border-white cursor-pointer overflow-hidden p-0"
+                  />
+                  <span className="text-xs text-charcoal/60 font-medium uppercase tracking-widest">Custom Finish</span>
+                </div>
+              </div>
+
+              {/* Leg Finish Customisation */}
+              <div className="mb-10">
+                <p className="text-[10px] tracking-[0.2em] uppercase text-charcoal/40 font-bold mb-4">Leg Finish</p>
+                <div className="flex gap-4">
+                  {[
+                    { name: 'Charcoal', color: '#1A1A1A' },
+                    { name: 'Oak', color: '#DEB887' },
+                    { name: 'Walnut', color: '#5D4037' },
+                    { name: 'Silver', color: '#C0C0C0' }
+                  ].map(finish => (
+                    <button
+                      key={finish.name}
+                      onClick={() => setLegFinish(finish.color)}
+                      className="flex flex-col items-center gap-2 group"
+                    >
+                      <div className={`w-12 h-12 rounded-xl border-2 transition-all ${legFinish === finish.color ? 'border-charcoal scale-105 shadow-md' : 'border-stone-light/40 opacity-60'}`}
+                           style={{ backgroundColor: finish.color }} />
+                      <span className={`text-[9px] uppercase tracking-widest font-bold transition-colors ${legFinish === finish.color ? 'text-charcoal' : 'text-charcoal/30'}`}>
+                        {finish.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Quantity and Add to Cart */}

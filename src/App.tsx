@@ -17,6 +17,7 @@ import Footer from './components/Footer'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DesignerWorkspace from './pages/DesignerWorkspace'
+import RoomConfigurator from './pages/RoomConfigurator'
 import ProductPage from './pages/ProductPage'
 import CheckoutPage from './pages/CheckoutPage'
 import PastOrders from './pages/PastOrders'
@@ -71,6 +72,11 @@ function App() {
         } />
 
         {/* Protected Customer Routes: Designer */}
+        <Route path="/configure" element={
+          <ProtectedRoute>
+            <RoomConfigurator />
+          </ProtectedRoute>
+        } />
         <Route path="/designer" element={
           <ProtectedRoute>
             <DesignerWorkspace />
