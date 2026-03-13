@@ -5,6 +5,9 @@ export interface Design {
     roomType: string;
     createdAt: string;
     furniture: unknown[];
+    wallColor?: string;
+    floorColor?: string;
+    shadeLevel?: number;
 }
 
 // localStorage key

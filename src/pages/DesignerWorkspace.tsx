@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
     AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair,
-    Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download
+    Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download,
+    Paintbrush, Sun
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
@@ -31,6 +32,7 @@ type FurnitureType = {
     position: [number, number, number];
     rotation: [number, number, number];
     scale?: [number, number, number];
+    color?: string; // ✅ NEW: per-item colour
 };
 
 type RoomConfig = {
@@ -63,11 +65,10 @@ const CATALOG = [
 function getSizeForType(type: string): [number, number, number] {
     return CATALOG.find(c => c.type === type)?.size ?? [1, 1, 1];
 }
-function getColorForType(type: string): string {
+function getDefaultColorForType(type: string): string {
     return CATALOG.find(c => c.type === type)?.color ?? '#999';
 }
 
-// Map furniture types to their GLB model components
 const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-line @typescript-eslint/no-explicit-any
     chair: ChairModel,
     table: TableModel,
@@ -79,26 +80,35 @@ const MODEL_MAP: Record<string, React.ComponentType<any>> = { // eslint-disable-
 
 // ─── 3D Sub-Components ──────────────────────────────────────────────────────
 
-function RoomGeometry({ room, onDeselect }: { room: RoomConfig; onDeselect: () => void }) {
-    const { width, depth, height, wallColor, floorColor } = room;
+function RoomGeometry({ room, wallColor, floorColor, onDeselect }: {
+    room: RoomConfig;
+    wallColor: string;   // ✅ live overrides
+    floorColor: string;
+    onDeselect: () => void;
+}) {
+    const { width, depth, height } = room;
     const hw = width / 2;
     const hd = depth / 2;
 
     return (
         <group>
+            {/* Floor */}
             <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}
                 onClick={(e) => { e.stopPropagation(); onDeselect(); }}>
                 <planeGeometry args={[width, depth]} />
                 <meshStandardMaterial color={floorColor} />
             </mesh>
+            {/* Back wall */}
             <mesh receiveShadow position={[0, height / 2, -hd]}>
                 <planeGeometry args={[width, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
             </mesh>
+            {/* Left wall */}
             <mesh receiveShadow position={[-hw, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
                 <planeGeometry args={[depth, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
             </mesh>
+            {/* Right wall */}
             <mesh receiveShadow position={[hw, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
                 <planeGeometry args={[depth, height]} />
                 <meshStandardMaterial color={wallColor} side={THREE.DoubleSide} />
@@ -120,11 +130,11 @@ function Model({
 }) {
     const groupRef = useRef<THREE.Group>(null!);
     const size = getSizeForType(item.type);
-    const color = getColorForType(item.type);
+    // ✅ Use per-item colour, fall back to catalog default
+    const color = item.color ?? getDefaultColorForType(item.type);
     const GlbModel = MODEL_MAP[item.type];
     const scale = item.scale || [1, 1, 1];
 
-    // Compute final scale for custom objects and basic cubes
     const finalGlbScale: [number, number, number] = [0.5 * scale[0], 0.5 * scale[1], 0.5 * scale[2]];
     const boundingBoxSize: [number, number, number] = [size[0] * scale[0], size[1] * scale[1], size[2] * scale[2]];
 
@@ -178,6 +188,59 @@ function Model({
     );
 }
 
+// ─── Confirm Dialog ──────────────────────────────────────────────────────────
+function ConfirmDialog({
+    open, title, message, onConfirm, onCancel
+}: {
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <AnimatePresence>
+            {open && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-charcoal/40 backdrop-blur-sm"
+                >
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl border border-stone-light/50"
+                    >
+                        <h3 className="text-xl font-serif text-charcoal mb-2">{title}</h3>
+                        <p className="text-sm text-charcoal/55 mb-8 leading-relaxed">{message}</p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={onCancel}
+                                className="px-5 py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium
+                                           text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={onConfirm}
+                                className="px-6 py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium
+                                           bg-red-500 text-white hover:bg-red-600 transition-all duration-300
+                                           flex items-center gap-2 shadow-sm hover:shadow-md"
+                            >
+                                <Trash2 size={13} strokeWidth={1.5} />
+                                Delete
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}
+
 // ─── Main Page Component ─────────────────────────────────────────────────────
 export default function DesignerWorkspace() {
     const navigate = useNavigate();
@@ -196,9 +259,20 @@ export default function DesignerWorkspace() {
     const [isSaving, setIsSaving] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // ✅ NEW: live room colour overrides (persisted to Supabase)
+    const [customWallColor, setCustomWallColor] = useState<string>('');
+    const [customFloorColor, setCustomFloorColor] = useState<string>('');
+
+    // ✅ NEW: shading overlay (0–0.8 opacity)
+    const [shadeLevel, setShadeLevel] = useState<number>(0);
+
+    // ✅ FIX: proper canvas ref for export
+    const glRef = useRef<THREE.WebGLRenderer | null>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orbitControlsRef = useRef<any>(null);
+
+    // ✅ NEW: delete confirmation
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
     const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
     const [designName, setDesignName] = useState('');
@@ -214,23 +288,36 @@ export default function DesignerWorkspace() {
     };
 
     const activeRoom = ROOMS.find(r => r.id === selectedRoomId) || ROOMS[0];
+
+    // Resolve effective wall/floor colors (custom override or room default)
+    const effectiveWallColor = customWallColor || activeRoom.wallColor;
+    const effectiveFloorColor = customFloorColor || activeRoom.floorColor;
+
     const selectedItem = placedItems.find(i => i.id === selectedId);
 
-    // --- Load Design (Supabase with localStorage fallback) ---
+    // Reset colour overrides when room type changes
+    useEffect(() => {
+        setCustomWallColor('');
+        setCustomFloorColor('');
+    }, [selectedRoomId]);
+
+    // --- Load Design ---
     useEffect(() => {
         if (!designIdFromUrl) return;
 
-        // Try localStorage first (always available)
         const localDesign = getLocalDesign(designIdFromUrl);
         if (localDesign) {
             setCurrentDesignId(localDesign.id);
             setDesignName(localDesign.name || 'Untitled Room');
             setSelectedRoomId(localDesign.roomType || ROOMS[0].id);
             setPlacedItems((localDesign.furniture as FurnitureType[]) || []);
+            // ✅ Restore saved colours
+            if (localDesign.wallColor) setCustomWallColor(localDesign.wallColor);
+            if (localDesign.floorColor) setCustomFloorColor(localDesign.floorColor);
+            if (localDesign.shadeLevel !== undefined) setShadeLevel(localDesign.shadeLevel);
             return;
         }
 
-        // Fallback: try Supabase
         const loadFromSupabase = async () => {
             const user = getUser();
             if (!user?.id) return;
@@ -246,12 +333,16 @@ export default function DesignerWorkspace() {
                 setDesignName(design.name || 'Untitled Room');
                 setSelectedRoomId(design.room_type);
                 setPlacedItems(design.furniture_layout || []);
+                // ✅ Restore saved colours from Supabase
+                if (design.wall_color) setCustomWallColor(design.wall_color);
+                if (design.floor_color) setCustomFloorColor(design.floor_color);
+                if (design.shade_level !== undefined) setShadeLevel(design.shade_level);
             }
         };
         loadFromSupabase();
     }, [designIdFromUrl]);
 
-    // Action History
+    // History management
     const pushToHistory = (newState: FurnitureType[]) => {
         const newHistory = history.slice(0, historyIndex + 1);
         newHistory.push(newState);
@@ -275,7 +366,6 @@ export default function DesignerWorkspace() {
         }
     };
 
-    // Ensure initial empty state is in history
     useEffect(() => {
         if (history.length === 0 && placedItems.length === 0) {
             pushToHistory([]);
@@ -292,6 +382,7 @@ export default function DesignerWorkspace() {
             position: [placedItems.length * 0.5, 0, 0],
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
+            color: catalogItem.color, // ✅ set default color on creation
         };
         const newState = [...placedItems, newItem];
         setPlacedItems(newState);
@@ -305,12 +396,19 @@ export default function DesignerWorkspace() {
         pushToHistory(newState);
     };
 
+    // ✅ FIX: show confirm dialog before deleting
     const deleteSelected = () => {
+        if (selectedId) setIsDeleteConfirmOpen(true);
+    };
+
+    const confirmDelete = () => {
         if (selectedId) {
             const newState = placedItems.filter(item => item.id !== selectedId);
             setPlacedItems(newState);
             pushToHistory(newState);
             setSelectedId(null);
+            setIsDeleteConfirmOpen(false);
+            showToastMessage('Item removed from design');
         }
     };
 
@@ -328,14 +426,21 @@ export default function DesignerWorkspace() {
         }
     };
 
+    // ✅ FIX: proper canvas export using gl.domElement
     const handleExportImage = () => {
-        if (canvasRef.current) {
-            const url = canvasRef.current.toDataURL('image/png');
+        if (glRef.current) {
+            glRef.current.render(
+                glRef.current.getRenderTarget()?.texture as unknown as THREE.Scene,
+                new THREE.Camera()
+            );
+            const url = glRef.current.domElement.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = 'room-design.png';
+            link.download = `${designName || 'room-design'}.png`;
             link.href = url;
             link.click();
             showToastMessage('Design exported as image!');
+        } else {
+            showToastMessage('Export failed — try again after the scene loads.', 'error');
         }
     };
 
@@ -359,6 +464,9 @@ export default function DesignerWorkspace() {
         setHistoryIndex(0);
         setSelectedId(null);
         setSelectedRoomId(ROOMS[0].id);
+        setCustomWallColor('');
+        setCustomFloorColor('');
+        setShadeLevel(0);
         setIsNewDesignModalOpen(false);
         setSearchParams({});
         showToastMessage(`New design "${name}" created`);
@@ -370,18 +478,14 @@ export default function DesignerWorkspace() {
             showToastMessage('Please sign in to save your designs.', 'error');
             return;
         }
-
-        // First save with no name yet → prompt for a name
         if (!currentDesignId && !designName.trim()) {
             setSaveNameInput('');
             setIsSaveNameModalOpen(true);
             return;
         }
-
         await executeSave(designName);
     };
 
-    // Confirm name from the save-name modal and persist
     const confirmSaveWithName = async () => {
         const name = saveNameInput.trim() || `Room Design - ${new Date().toLocaleDateString()}`;
         setDesignName(name);
@@ -389,30 +493,28 @@ export default function DesignerWorkspace() {
         await executeSave(name);
     };
 
-    // Shared save logic (Supabase + localStorage for reliability)
+    // ✅ UPDATED: persist wall/floor colour + shade level
     const executeSave = async (name: string) => {
         const safeName = name || 'Untitled Room';
-
         setIsSaving(true);
         try {
-            // Always save to localStorage (reliable, instant)
+            const designData = {
+                name: safeName,
+                roomType: selectedRoomId,
+                furniture: placedItems,
+                wallColor: effectiveWallColor,   // ✅
+                floorColor: effectiveFloorColor, // ✅
+                shadeLevel,                      // ✅
+            };
+
             if (currentDesignId) {
-                updateLocal(currentDesignId, {
-                    name: safeName,
-                    roomType: selectedRoomId,
-                    furniture: placedItems,
-                });
+                updateLocal(currentDesignId, designData);
             } else {
-                const saved = saveToLocal({
-                    name: safeName,
-                    roomType: selectedRoomId,
-                    furniture: placedItems,
-                });
+                const saved = saveToLocal(designData);
                 setCurrentDesignId(saved.id);
                 setSearchParams({ designId: saved.id });
             }
 
-            // Also try Supabase (best-effort, won't block the UI)
             const user = getUser();
             if (user?.id) {
                 const supaPayload = {
@@ -420,6 +522,9 @@ export default function DesignerWorkspace() {
                     name: safeName,
                     room_type: selectedRoomId,
                     furniture_layout: placedItems,
+                    wall_color: effectiveWallColor,   // ✅
+                    floor_color: effectiveFloorColor, // ✅
+                    shade_level: shadeLevel,          // ✅
                 };
 
                 if (currentDesignId) {
@@ -440,6 +545,15 @@ export default function DesignerWorkspace() {
 
     return (
         <div className="min-h-screen bg-cream flex flex-col h-screen overflow-hidden">
+
+            {/* ─── Delete Confirm Dialog ─── */}
+            <ConfirmDialog
+                open={isDeleteConfirmOpen}
+                title="Remove Item"
+                message={`Remove "${selectedItem?.name}" from the design? This cannot be undone.`}
+                onConfirm={confirmDelete}
+                onCancel={() => setIsDeleteConfirmOpen(false)}
+            />
 
             {/* ─── Top Header Bar ─── */}
             <motion.header
@@ -522,7 +636,7 @@ export default function DesignerWorkspace() {
                                 onClick={handleUndo}
                                 disabled={historyIndex <= 0}
                                 className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Undo"
+                                title="Undo (Ctrl+Z)"
                             >
                                 <Undo2 size={16} strokeWidth={1.5} />
                             </button>
@@ -530,7 +644,7 @@ export default function DesignerWorkspace() {
                                 onClick={handleRedo}
                                 disabled={historyIndex >= history.length - 1}
                                 className="group p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Redo"
+                                title="Redo (Ctrl+Y)"
                             >
                                 <Redo2 size={16} strokeWidth={1.5} />
                             </button>
@@ -593,24 +707,15 @@ export default function DesignerWorkspace() {
                             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                             className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
                         >
-                            <button
-                                onClick={() => setIsNewDesignModalOpen(false)}
-                                className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"
-                            >
+                            <button onClick={() => setIsNewDesignModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40">
                                 <X size={18} strokeWidth={1.5} />
                             </button>
-
                             <div className="mb-8">
                                 <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Start Fresh</p>
-                                <h3 className="text-3xl font-serif text-charcoal">
-                                    New <span className="italic">Design</span>
-                                </h3>
+                                <h3 className="text-3xl font-serif text-charcoal">New <span className="italic">Design</span></h3>
                             </div>
-
                             <form onSubmit={(e) => { e.preventDefault(); confirmCreateNew(); }}>
-                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">
-                                    Design Name
-                                </label>
+                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">Design Name</label>
                                 <input
                                     type="text"
                                     autoFocus
@@ -620,22 +725,9 @@ export default function DesignerWorkspace() {
                                     className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
                                                focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
                                 />
-
                                 <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsNewDesignModalOpen(false)}
-                                        className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                                   text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                                   hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md
-                                                   inline-flex items-center gap-2"
-                                    >
+                                    <button type="button" onClick={() => setIsNewDesignModalOpen(false)} className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">Cancel</button>
+                                    <button type="submit" className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md inline-flex items-center gap-2">
                                         <Plus size={14} strokeWidth={2} />
                                         Create Design
                                     </button>
@@ -646,7 +738,7 @@ export default function DesignerWorkspace() {
                 )}
             </AnimatePresence>
 
-            {/* ─── Save Name Modal (first-time save) ─── */}
+            {/* ─── Save Name Modal ─── */}
             <AnimatePresence>
                 {isSaveNameModalOpen && (
                     <motion.div
@@ -662,24 +754,15 @@ export default function DesignerWorkspace() {
                             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                             className="bg-warm-white w-full max-w-md rounded-2xl p-10 shadow-2xl relative border border-stone-light/50"
                         >
-                            <button
-                                onClick={() => setIsSaveNameModalOpen(false)}
-                                className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40"
-                            >
+                            <button onClick={() => setIsSaveNameModalOpen(false)} className="absolute top-6 right-6 text-charcoal/30 hover:text-charcoal transition-colors duration-300 p-1 rounded-md hover:bg-stone-light/40">
                                 <X size={18} strokeWidth={1.5} />
                             </button>
-
                             <div className="mb-8">
                                 <p className="text-[10px] tracking-[0.3em] uppercase text-stone-dark mb-3">Save Your Work</p>
-                                <h3 className="text-3xl font-serif text-charcoal">
-                                    Name Your <span className="italic">Design</span>
-                                </h3>
+                                <h3 className="text-3xl font-serif text-charcoal">Name Your <span className="italic">Design</span></h3>
                             </div>
-
                             <form onSubmit={(e) => { e.preventDefault(); confirmSaveWithName(); }}>
-                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">
-                                    Design Name
-                                </label>
+                                <label className="block text-[10px] tracking-[0.2em] uppercase text-charcoal/50 mb-2.5 font-medium">Design Name</label>
                                 <input
                                     type="text"
                                     autoFocus
@@ -689,22 +772,9 @@ export default function DesignerWorkspace() {
                                     className="w-full border border-stone-light bg-white rounded-lg px-4 py-3.5 text-sm text-charcoal placeholder:text-charcoal/25
                                                focus:outline-none focus:border-sage focus:ring-2 focus:ring-sage/10 transition-all duration-300 mb-8"
                                 />
-
                                 <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsSaveNameModalOpen(false)}
-                                        className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                                   text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                                   hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md
-                                                   inline-flex items-center gap-2"
-                                    >
+                                    <button type="button" onClick={() => setIsSaveNameModalOpen(false)} className="px-6 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">Cancel</button>
+                                    <button type="submit" className="group bg-charcoal text-white px-8 py-3 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium hover:bg-charcoal-light transition-all duration-300 shadow-sm hover:shadow-md inline-flex items-center gap-2">
                                         <Save size={14} strokeWidth={1.5} />
                                         Save Design
                                     </button>
@@ -728,7 +798,7 @@ export default function DesignerWorkspace() {
                     {/* ─ Room Selector ─ */}
                     <div className="p-5 border-b border-stone-light/70">
                         <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-3 font-medium">Room Type</p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2 mb-4">
                             {ROOMS.map((room) => (
                                 <button
                                     key={room.id}
@@ -743,6 +813,69 @@ export default function DesignerWorkspace() {
                                 </button>
                             ))}
                         </div>
+
+                        {/* ✅ NEW: Wall Colour Picker */}
+                        <div className="flex flex-col gap-3 pt-3 border-t border-stone-light/50">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-charcoal/55">
+                                    <Paintbrush size={13} strokeWidth={1.5} />
+                                    <span className="text-[11px] tracking-wide font-medium">Wall Colour</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-charcoal/35 font-mono">{effectiveWallColor}</span>
+                                    <input
+                                        type="color"
+                                        value={effectiveWallColor}
+                                        onChange={(e) => setCustomWallColor(e.target.value)}
+                                        className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5"
+                                        title="Pick wall colour"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* ✅ NEW: Floor Colour Picker */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-charcoal/55">
+                                    <GridIcon size={13} strokeWidth={1.5} />
+                                    <span className="text-[11px] tracking-wide font-medium">Floor Colour</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-charcoal/35 font-mono">{effectiveFloorColor}</span>
+                                    <input
+                                        type="color"
+                                        value={effectiveFloorColor}
+                                        onChange={(e) => setCustomFloorColor(e.target.value)}
+                                        className="w-8 h-8 rounded-md border border-stone-light cursor-pointer bg-transparent p-0.5"
+                                        title="Pick floor colour"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* ✅ NEW: Shading Overlay */}
+                            <div className="flex flex-col gap-2 pt-1">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-charcoal/55">
+                                        <Sun size={13} strokeWidth={1.5} />
+                                        <span className="text-[11px] tracking-wide font-medium">Room Shading</span>
+                                    </div>
+                                    <span className="text-[10px] font-medium text-charcoal bg-stone-light/30 px-1.5 py-0.5 rounded">
+                                        {Math.round(shadeLevel * 100)}%
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="80"
+                                    step="5"
+                                    value={shadeLevel * 100}
+                                    onChange={(e) => setShadeLevel(parseFloat(e.target.value) / 100)}
+                                    className="w-full h-1.5 bg-stone-light/50 rounded-lg appearance-none cursor-pointer accent-charcoal"
+                                />
+                                <p className="text-[9px] text-charcoal/30 tracking-wide">
+                                    Simulates room lighting / ambiance
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     {/* ─ Tools ─ */}
@@ -751,7 +884,7 @@ export default function DesignerWorkspace() {
                         <div className="flex gap-2 mb-3">
                             <button
                                 onClick={() => setTransformMode('translate')}
-                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300 group
+                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300
                                     ${transformMode === 'translate'
                                         ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
                                         : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
@@ -762,7 +895,7 @@ export default function DesignerWorkspace() {
                             </button>
                             <button
                                 onClick={() => setTransformMode('rotate')}
-                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300 group
+                                className={`flex-1 flex flex-col items-center justify-center py-3.5 rounded-xl border transition-all duration-300
                                     ${transformMode === 'rotate'
                                         ? 'border-sage/40 bg-sage/10 text-sage-dark shadow-sm'
                                         : 'border-stone-light/60 text-charcoal/40 hover:bg-stone-light/30 hover:text-charcoal/60 hover:border-stone-light'
@@ -773,7 +906,6 @@ export default function DesignerWorkspace() {
                             </button>
                         </div>
 
-                        {/* Snap to Grid Toggle */}
                         <div className="flex items-center justify-between px-2 mt-4 bg-stone-light/20 py-2 rounded-lg border border-stone-light/40">
                             <div className="flex items-center gap-2 text-charcoal/60">
                                 <GridIcon size={14} strokeWidth={1.5} />
@@ -781,13 +913,9 @@ export default function DesignerWorkspace() {
                             </div>
                             <button
                                 onClick={() => setSnapToGrid(!snapToGrid)}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none ${snapToGrid ? 'bg-sage' : 'bg-stone-light/60'
-                                    }`}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none ${snapToGrid ? 'bg-sage' : 'bg-stone-light/60'}`}
                             >
-                                <span
-                                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${snapToGrid ? 'translate-x-4.5' : 'translate-x-1'
-                                        }`}
-                                />
+                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${snapToGrid ? 'translate-x-4.5' : 'translate-x-1'}`} />
                             </button>
                         </div>
                     </div>
@@ -834,12 +962,45 @@ export default function DesignerWorkspace() {
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
                                 transition={{ duration: 0.25 }}
-                                className="border-t border-stone-light/70 bg-white/50 backdrop-blur-md overflow-y-auto max-h-[45vh] scrollbar-thin scrollbar-thumb-stone-light scrollbar-track-transparent"
+                                className="border-t border-stone-light/70 bg-white/50 backdrop-blur-md overflow-y-auto max-h-[50vh] scrollbar-thin scrollbar-thumb-stone-light scrollbar-track-transparent"
                             >
-                                <div className="p-5 flex flex-col gap-5">
+                                <div className="p-5 flex flex-col gap-4">
                                     <div className="flex flex-col gap-1">
                                         <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 font-bold">Selected Item</p>
                                         <span className="text-lg font-serif text-charcoal">{selectedItem.name}</span>
+                                    </div>
+
+                                    {/* ✅ NEW: Furniture Colour Picker */}
+                                    <div className="bg-white rounded-xl p-3 border border-stone-light/60 shadow-sm">
+                                        <p className="text-[10px] tracking-widest uppercase text-charcoal/50 font-medium mb-3">Item Colour</p>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="color"
+                                                value={selectedItem.color ?? getDefaultColorForType(selectedItem.type)}
+                                                onChange={(e) => updateItem(selectedItem.id, { color: e.target.value })}
+                                                className="w-10 h-10 rounded-lg border border-stone-light cursor-pointer bg-transparent p-0.5 flex-shrink-0"
+                                                title="Change furniture colour"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="text-[11px] text-charcoal/60 font-mono mb-1">
+                                                    {selectedItem.color ?? getDefaultColorForType(selectedItem.type)}
+                                                </p>
+                                                <div className="flex gap-1.5 flex-wrap">
+                                                    {['#8B7355', '#A0522D', '#BC8F8F', '#DEB887', '#8DA399', '#4A4A4A', '#F5F0EA', '#C9A87C'].map(c => (
+                                                        <button
+                                                            key={c}
+                                                            onClick={() => updateItem(selectedItem.id, { color: c })}
+                                                            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                                                            style={{
+                                                                background: c,
+                                                                borderColor: selectedItem.color === c ? '#1A1A1A' : 'transparent'
+                                                            }}
+                                                            title={c}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* Position Controls */}
@@ -911,7 +1072,7 @@ export default function DesignerWorkspace() {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex flex-col gap-2 pt-2 border-t border-stone-light/50 mt-1">
+                                    <div className="flex flex-col gap-2 pt-2 border-t border-stone-light/50">
                                         <p className="text-[10px] tracking-widest uppercase text-charcoal/40 font-medium mb-1">Actions</p>
                                         <div className="flex gap-2">
                                             <button
@@ -942,7 +1103,7 @@ export default function DesignerWorkspace() {
                     </AnimatePresence>
                 </motion.aside>
 
-                {/* ─── 3D Canvas ─── */}
+                {/* ─── Canvas Area ─── */}
                 <section className="flex-1 relative bg-stone-light/15">
                     {/* Item Count Badge */}
                     <motion.div
@@ -958,7 +1119,12 @@ export default function DesignerWorkspace() {
                         </span>
                     </motion.div>
 
-                    <Canvas shadows ref={canvasRef} gl={{ preserveDrawingBuffer: true }}>
+                    {/* ✅ FIX: use onCreated to capture gl for export */}
+                    <Canvas
+                        shadows
+                        gl={{ preserveDrawingBuffer: true }}
+                        onCreated={({ gl }) => { glRef.current = gl; }}
+                    >
                         {viewMode === '2d' ? (
                             <OrthographicCamera makeDefault position={[0, 10, 0]} zoom={60} near={0.1} far={100} rotation={[-Math.PI / 2, 0, 0]} />
                         ) : (
@@ -983,7 +1149,13 @@ export default function DesignerWorkspace() {
                             />
                         )}
 
-                        <RoomGeometry room={activeRoom} onDeselect={() => setSelectedId(null)} />
+                        {/* ✅ Pass live colour overrides to room geometry */}
+                        <RoomGeometry
+                            room={activeRoom}
+                            wallColor={effectiveWallColor}
+                            floorColor={effectiveFloorColor}
+                            onDeselect={() => setSelectedId(null)}
+                        />
 
                         {placedItems.map((item) => (
                             <Model
@@ -1006,6 +1178,14 @@ export default function DesignerWorkspace() {
                             <OrbitControls ref={orbitControlsRef as any} makeDefault enabled={!isDragging} enableRotate={false} />
                         )}
                     </Canvas>
+
+                    {/* ✅ NEW: Shading overlay rendered on top of canvas */}
+                    {shadeLevel > 0 && (
+                        <div
+                            className="absolute inset-0 pointer-events-none transition-all duration-300"
+                            style={{ background: `rgba(0, 0, 0, ${shadeLevel})` }}
+                        />
+                    )}
                 </section>
             </main>
 
@@ -1017,8 +1197,7 @@ export default function DesignerWorkspace() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.92 }}
                         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                        className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none
-                                   border border-white/5"
+                        className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none border border-white/5"
                     >
                         <div className={`p-1.5 rounded-full text-white ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
                             {toast.type === 'success'

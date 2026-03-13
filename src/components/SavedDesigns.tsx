@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight, PenTool } from 'lucide-react';
 import { motion, useInView } from 'framer-motion';
@@ -7,15 +7,12 @@ import { isLoggedIn } from '../utils/auth';
 
 export default function SavedDesigns() {
     const navigate = useNavigate();
-    const [designs, setDesigns] = useState<Design[]>([]);
+    const [designs, setDesigns] = useState<Design[]>(() => getDesigns());
     const sectionRef = useRef(null);
     const inView = useInView(sectionRef, { once: true, margin: '-80px' });
     const loggedIn = isLoggedIn();
 
     // Load saved designs from localStorage on mount
-    useEffect(() => {
-        setDesigns(getDesigns());
-    }, []);
 
     // Only show this section for logged-in users
     if (!loggedIn) return null;
