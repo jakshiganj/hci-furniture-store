@@ -67,8 +67,8 @@ const CATALOG = [
     { type: 'vase', name: 'Vase', color: '#D8BFD8', size: [0.35, 0.55, 0.35] as [number, number, number] },
     { type: 'desk', name: 'Desk', color: '#8B6914', size: [1.5, 0.75, 0.75] as [number, number, number] },
     { type: 'wardrobe', name: 'Wardrobe', color: '#7B5E3A', size: [1.3, 2.1, 0.6] as [number, number, number] },
-    { type: 'lamp', name: 'Floor Lamp', color: '#D4AF37', size: [0.35, 1.7, 0.35] as [number, number, number] },
-    { type: 'tv', name: 'TV Stand', color: '#3A3A3A', size: [1.6, 0.55, 0.45] as [number, number, number] },
+    { type: 'floorlamp', name: 'Floor Lamp', color: '#D4AF37', size: [0.35, 1.7, 0.35] as [number, number, number] },
+    { type: 'tvstand', name: 'TV Stand', color: '#3A3A3A', size: [1.6, 0.55, 0.45] as [number, number, number] },
 ];
 
 function getSizeForType(type: string): [number, number, number] {
@@ -87,8 +87,8 @@ const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, nu
     vase: VaseModel,
     desk: DeskModel,
     wardrobe: WardrobeModel,
-    lamp: FloorLampModel,
-    tv: TVStandModel,
+    floorlamp: FloorLampModel,
+    tvstand: TVStandModel,
 };
 
 // ─── 3D Model component ───────────────────────────────────────────────────────
