@@ -36,6 +36,10 @@ import SofaModel from '../components/models/SofaModel';
 import BedModel from '../components/models/BedModel';
 import ShelfModel from '../components/models/ShelfModel';
 import VaseModel from '../components/models/VaseModel';
+import DeskModel from '../components/models/DeskModel';
+import WardrobeModel from '../components/models/WardrobeModel';
+import FloorLampModel from '../components/models/FloorLampModel';
+import TVStandModel from '../components/models/TVStandModel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +85,10 @@ const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, nu
     bed: BedModel,
     shelf: ShelfModel,
     vase: VaseModel,
+    desk: DeskModel,
+    wardrobe: WardrobeModel,
+    lamp: FloorLampModel,
+    tv: TVStandModel,
 };
 
 // ─── 3D Model component ───────────────────────────────────────────────────────
