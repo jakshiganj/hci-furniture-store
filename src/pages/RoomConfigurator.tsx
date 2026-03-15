@@ -30,6 +30,9 @@ export default function RoomConfigurator() {
     const [wallTexture, setWallTexture] = useState<WallTexture>('plain');
     const [lightingMode, setLightingMode] = useState<LightingMode>('natural');
     const [lightPos] = useState<LightPos>({ x: 5, y: 8, z: 5 });
+    const [extWidth, setExtWidth] = useState<number>(0);
+    const [extDepth, setExtDepth] = useState<number>(0);
+    const [corner, setCorner] = useState<'NE' | 'NW' | 'SE' | 'SW'>('SE');
     const [designName, setDesignName] = useState<string>('');
 
     // ─── Computed ────────────────────────────────────────────────────────────────
@@ -43,6 +46,14 @@ export default function RoomConfigurator() {
         setCustomDepth(room.depth);
         setWallColor(room.wallColor);
         setFloorColor(room.floorColor);
+        if (room.lShape) {
+            setExtWidth(room.lShape.extWidth);
+            setExtDepth(room.lShape.extDepth);
+            setCorner(room.lShape.corner);
+        } else {
+            setExtWidth(0);
+            setExtDepth(0);
+        }
     };
 
     const handleProceed = () => {
@@ -58,6 +69,11 @@ export default function RoomConfigurator() {
             lightingMode,
             name: designName
         });
+        if (extWidth > 0 && extDepth > 0) {
+            params.append('extWidth', extWidth.toString());
+            params.append('extDepth', extDepth.toString());
+            params.append('corner', corner);
+        }
         navigate(`/designer?${params.toString()}`);
     };
 
@@ -187,6 +203,61 @@ export default function RoomConfigurator() {
                             </div>
                         </div>
                     </section>
+                    
+                    {/* Section 2.5: L-Shape Extension (Conditional) */}
+                    {activeRoom.lShape && (
+                        <motion.section
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="bg-sage/5 rounded-2xl p-6 border border-sage/20 border-dashed"
+                        >
+                            <div className="flex items-center gap-2.5 mb-5">
+                                <div className="p-2 bg-sage/10 rounded-lg text-sage-dark">
+                                    <Layout size={16} strokeWidth={2.5}/>
+                                </div>
+                                <h2 className="text-sm font-medium tracking-wide">L-Shape Extension</h2>
+                            </div>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1 flex flex-col gap-2">
+                                        <label className="text-[10px] uppercase tracking-widest font-bold text-charcoal/40 ml-1">Ext Width (m)</label>
+                                        <input 
+                                            type="number" 
+                                            value={extWidth}
+                                            onChange={(e) => setExtWidth(parseFloat(e.target.value) || 0)}
+                                            min={1} max={10} step={0.5}
+                                            className="w-full bg-white border border-stone-light/60 rounded-xl px-4 py-3 text-sm focus:border-sage outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div className="flex-1 flex flex-col gap-2">
+                                        <label className="text-[10px] uppercase tracking-widest font-bold text-charcoal/40 ml-1">Ext Depth (m)</label>
+                                        <input 
+                                            type="number" 
+                                            value={extDepth}
+                                            onChange={(e) => setExtDepth(parseFloat(e.target.value) || 0)}
+                                            min={1} max={10} step={0.5}
+                                            className="w-full bg-white border border-stone-light/60 rounded-xl px-4 py-3 text-sm focus:border-sage outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] uppercase tracking-widest font-bold text-charcoal/40 ml-1">Extension Corner</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {(['NW', 'NE', 'SW', 'SE'] as const).map(c => (
+                                            <button
+                                                key={c}
+                                                onClick={() => setCorner(c)}
+                                                className={`py-2 rounded-lg text-[10px] font-bold border transition-all
+                                                    ${corner === c ? 'bg-sage text-white border-sage' : 'bg-white text-charcoal/40 border-stone-light/60 hover:border-sage'}`}
+                                            >
+                                                {c}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.section>
+                    )}
 
                     {/* Section 3: Palette */}
                     <section className="grid grid-cols-2 gap-8">
@@ -314,6 +385,7 @@ export default function RoomConfigurator() {
                                 wallColor={wallColor}
                                 floorColor={floorColor}
                                 wallTexture={wallTexture}
+                                lShape={extWidth > 0 && extDepth > 0 ? { extWidth, extDepth, corner } : undefined}
                                 onDeselect={() => {}}
                             />
                             

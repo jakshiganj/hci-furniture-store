@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ShoppingBag, Search, User, LogOut, Package } from 'lucide-react';
+import { Menu, X, ShoppingBag, Search, User, LogOut, Package, Layout } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
@@ -107,6 +107,11 @@ export default function Navbar() {
               {loggedIn && !adminLevel && (
                 <Link to="/orders" className="text-charcoal/70 hover:text-charcoal transition-colors" aria-label="My Orders" title="My Orders">
                   <Package size={18} strokeWidth={1.5} />
+                </Link>
+              )}
+              {loggedIn && !adminLevel && (
+                <Link to="/my-designs" className="text-charcoal/70 hover:text-charcoal transition-colors" aria-label="My Designs" title="My Designs">
+                  <Layout size={18} strokeWidth={1.5} />
                 </Link>
               )}
               <Link to="/checkout" className="text-charcoal/70 hover:text-charcoal transition-colors relative" aria-label="Cart">
@@ -223,6 +228,21 @@ export default function Navbar() {
                     onClick={() => setIsMobileOpen(false)}
                   >
                     My Orders
+                  </Link>
+                </motion.div>
+              )}
+              {loggedIn && !adminLevel && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: (navLinks.length + 1) * 0.1 }}
+                >
+                  <Link
+                    to="/my-designs"
+                    className="text-3xl font-serif text-charcoal"
+                    onClick={() => setIsMobileOpen(false)}
+                  >
+                    My Designs
                   </Link>
                 </motion.div>
               )}

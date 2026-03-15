@@ -47,6 +47,9 @@ export interface SavedDesign {
     lighting_mode?: string;
     custom_width?: number;
     custom_depth?: number;
+    l_shape_ext_width?: number;
+    l_shape_ext_depth?: number;
+    l_shape_corner?: 'NE' | 'NW' | 'SE' | 'SW';
     light_pos_x?: number;
     light_pos_y?: number;
     light_pos_z?: number;

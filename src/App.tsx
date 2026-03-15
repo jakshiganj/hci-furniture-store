@@ -25,6 +25,7 @@ import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
+import MyDesigns from './pages/MyDesigns'
 
 function HomePage() {
   return (
@@ -63,6 +64,11 @@ function App() {
         <Route path="/orders" element={
           <ProtectedRoute>
             <PastOrders />
+          </ProtectedRoute>
+        } />
+        <Route path="/my-designs" element={
+          <ProtectedRoute>
+            <MyDesigns />
           </ProtectedRoute>
         } />
 

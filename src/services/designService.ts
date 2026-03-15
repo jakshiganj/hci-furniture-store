@@ -20,6 +20,11 @@ export interface RoomConfig {
     height: number;
     wallColor: string;
     floorColor: string;
+    lShape?: {
+        extWidth: number;
+        extDepth: number;
+        corner: 'NE' | 'NW' | 'SE' | 'SW';
+    };
 }
 
 export type LightingMode = 'natural' | 'warm' | 'cool' | 'dramatic' | 'bright';
@@ -46,6 +51,20 @@ export const ROOMS: RoomConfig[] = [
     { id: 'hallway', name: 'Hallway',      width: 4,  depth: 8,  height: 2.8, wallColor: '#ede8e0', floorColor: '#c8bfaf' },
     { id: 'studio',  name: 'Studio',       width: 9,  depth: 9,  height: 3.2, wallColor: '#e8e3db', floorColor: '#d0c8b8' },
     { id: 'nursery', name: 'Nursery',      width: 6,  depth: 5,  height: 2.8, wallColor: '#f0ece6', floorColor: '#d8d0c4' },
+    { 
+        id: 'lshape-living', 
+        name: 'L-Shape Living', 
+        width: 8, 
+        depth: 6, 
+        height: 3, 
+        wallColor: '#f5f0ea', 
+        floorColor: '#d4c9b8',
+        lShape: {
+            extWidth: 4,
+            extDepth: 3,
+            corner: 'SE',
+        }
+    }
 ];
 
 export interface Design {
@@ -61,7 +80,18 @@ export interface Design {
     lightingMode?: string;
     customWidth?: number;
     customDepth?: number;
+    lShape?: RoomConfig['lShape'];
     lightPos?: LightPos;
+    isShared?: boolean;
+    imageUrl?: string;
+}
+
+export interface UserProfile {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    role: string;
 }
 
 // localStorage key
@@ -154,9 +184,14 @@ export const mapFromSupabase = (d: {
     lighting_mode?: string;
     custom_width?: number;
     custom_depth?: number;
+    l_shape_ext_width?: number;
+    l_shape_ext_depth?: number;
+    l_shape_corner?: string;
     light_pos_x?: number;
     light_pos_y?: number;
     light_pos_z?: number;
+    is_shared?: boolean;
+    image_url?: string;
 }): Design => ({
     id: d.id,
     name: d.name,
@@ -169,7 +204,72 @@ export const mapFromSupabase = (d: {
     lightingMode: d.lighting_mode,
     customWidth: d.custom_width,
     customDepth: d.custom_depth,
+    lShape: (d.l_shape_ext_width !== undefined && d.l_shape_ext_depth !== undefined && d.l_shape_corner)
+        ? {
+            extWidth: d.l_shape_ext_width,
+            extDepth: d.l_shape_ext_depth,
+            corner: d.l_shape_corner as 'NE' | 'NW' | 'SE' | 'SW'
+        }
+        : undefined,
     lightPos: (d.light_pos_x !== undefined && d.light_pos_y !== undefined && d.light_pos_z !== undefined)
         ? { x: d.light_pos_x, y: d.light_pos_y, z: d.light_pos_z }
-        : undefined
+        : undefined,
+    isShared: d.is_shared,
+    imageUrl: d.image_url
 });
+
+/**
+ * Searches for users by name or email in Supabase profiles.
+ */
+export const searchUsers = async (query: string): Promise<UserProfile[]> => {
+    const { supabase } = await import('../utils/supabase');
+    
+    // We search across customers.
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, role')
+        .eq('role', 'customer')
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+        .limit(10);
+    
+    if (error) {
+        console.error("User search failed:", error);
+        return [];
+    }
+    
+    return (data || []) as UserProfile[];
+};
+
+/**
+ * Shares a design with a specific user.
+ */
+export const shareDesignWithUser = async (designId: string, targetUserId: string, imageData: string): Promise<boolean> => {
+    const { supabase } = await import('../utils/supabase');
+    try {
+        // 1. Update the design with the screenshot
+        const { error: updateError } = await supabase
+            .from('saved_designs')
+            .update({ image_url: imageData })
+            .eq('id', designId);
+            
+        if (updateError) throw updateError;
+        
+        // 2. Add or update sharing record (upsert based on unique constraint)
+        const { error: shareError } = await supabase
+            .from('design_shares')
+            .upsert(
+                { design_id: designId, shared_with_user_id: targetUserId },
+                { onConflict: 'design_id,shared_with_user_id' }
+            );
+            
+        if (shareError) {
+            console.error("Share record error:", shareError);
+            return false;
+        }
+        
+        return true;
+    } catch (err) {
+        console.error("Sharing failed:", err);
+        return false;
+    }
+};

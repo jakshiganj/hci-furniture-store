@@ -4,7 +4,7 @@ import {
     ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
     AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair,
     Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download,
-    Paintbrush, Sun, ArrowRight
+    Paintbrush, Sun, ArrowRight, Share2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -40,6 +40,7 @@ import DeskModel from '../components/models/DeskModel';
 import WardrobeModel from '../components/models/WardrobeModel';
 import FloorLampModel from '../components/models/FloorLampModel';
 import TVStandModel from '../components/models/TVStandModel';
+import UserShareModal from '../components/UserShareModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,37 @@ function getSizeForType(type: string): [number, number, number] {
 }
 function getDefaultColorForType(type: string): string {
     return CATALOG.find(c => c.type === type)?.color ?? '#999';
+}
+
+function isInsideLShape(
+    x: number,
+    z: number,
+    width: number,
+    depth: number,
+    lShape?: { extWidth: number; extDepth: number; corner: 'NE' | 'NW' | 'SE' | 'SW' }
+): boolean {
+    const hw = width / 2;
+    const hd = depth / 2;
+
+    // Inside the main rectangle
+    const inMain = x >= -hw && x <= hw && z >= -hd && z <= hd;
+    if (inMain) return true;
+
+    if (!lShape) return false;
+
+    // Inside the extension
+    const { extWidth, extDepth, corner } = lShape;
+    if (corner === 'SE') {
+        return x >= hw && x <= hw + extWidth && z >= hd - extDepth && z <= hd;
+    } else if (corner === 'SW') {
+        return x >= -hw - extWidth && x <= -hw && z >= hd - extDepth && z <= hd;
+    } else if (corner === 'NE') {
+        return x >= hw && x <= hw + extWidth && z >= -hd && z <= -hd + extDepth;
+    } else if (corner === 'NW') {
+        return x >= -hw - extWidth && x <= -hw && z >= -hd && z <= -hd + extDepth;
+    }
+
+    return false;
 }
 
 const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, number]; castShadow?: boolean; receiveShadow?: boolean }>> = {
@@ -186,7 +218,7 @@ function SelectionBox({ size }: { size: [number, number, number] }) {
 // ─── 3D Model component ───────────────────────────────────────────────────────
 
 function Model({
-    item, isSelected, onSelect, transformMode, updateItem, setIsDragging, snapToGrid,
+    item, isSelected, onSelect, transformMode, updateItem, setIsDragging, snapToGrid, roomWidth, roomDepth, lShape,
 }: {
     item: FurnitureType;
     isSelected: boolean;
@@ -195,6 +227,9 @@ function Model({
     updateItem: (id: string, updates: Partial<FurnitureType>) => void;
     setIsDragging: (v: boolean) => void;
     snapToGrid: boolean;
+    roomWidth: number;
+    roomDepth: number;
+    lShape?: { extWidth: number; extDepth: number; corner: 'NE' | 'NW' | 'SE' | 'SW' };
 }) {
     const { camera, gl } = useThree();
     const groupRef = useRef<THREE.Group>(null!);
@@ -325,7 +360,11 @@ function Model({
                             const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
                             const nx = snap(pt.x + dragOffset.current.x);
                             const nz = snap(pt.z + dragOffset.current.z);
-                            groupRef.current.position.set(nx, 0, nz);
+
+                            // L-shape bounds check
+                            if (isInsideLShape(nx, nz, roomWidth, roomDepth, lShape)) {
+                                groupRef.current.position.set(nx, 0, nz);
+                            }
                         } : undefined}
                         onPointerUp={transformMode === 'translate' && isSelected ? () => {
                             if (!isDragging.current) return;
@@ -454,6 +493,9 @@ export default function DesignerWorkspace() {
     const wallTextureParam = searchParams.get('wallTexture') as WallTexture | null;
     const lightingParam = searchParams.get('lightingMode') as LightingMode | null;
     const nameParam = searchParams.get('name');
+    const extWidthParam = searchParams.get('extWidth');
+    const extDepthParam = searchParams.get('extDepth');
+    const cornerParam = searchParams.get('corner');
 
     // ── View & tool state ────────────────────────────────────────────────────
     const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
@@ -474,6 +516,9 @@ export default function DesignerWorkspace() {
     const [designName, setDesignName] = useState(nameParam ? decodeURIComponent(nameParam) : '');
     const [customWidth, setCustomWidth] = useState(widthParam ? parseFloat(widthParam) : 0);
     const [customDepth, setCustomDepth] = useState(depthParam ? parseFloat(depthParam) : 0);
+    const [customExtWidth, setCustomExtWidth] = useState(extWidthParam ? parseFloat(extWidthParam) : 0);
+    const [customExtDepth, setCustomExtDepth] = useState(extDepthParam ? parseFloat(extDepthParam) : 0);
+    const [customCorner, setCustomCorner] = useState<'NE' | 'NW' | 'SE' | 'SW'>((cornerParam as 'NE' | 'NW' | 'SE' | 'SW') || 'SE');
 
     // ── Real light source position ───────────────────────────────────────────
     const [lightPos, setLightPos] = useState<LightPos>({ x: 5, y: 8, z: 5 });
@@ -489,6 +534,8 @@ export default function DesignerWorkspace() {
     const [sidebarMode, setSidebarMode] = useState<'room' | 'furniture'>(designIdFromUrl || roomIdParam ? 'furniture' : 'room');
     const [isSaveNameModalOpen, setIsSaveNameModalOpen] = useState(false);
     const [saveNameInput, setSaveNameInput] = useState('');
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [shareImageData, setShareImageData] = useState('');
 
     // ── Refs ─────────────────────────────────────────────────────────────────
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -500,6 +547,9 @@ export default function DesignerWorkspace() {
     const effectiveDepth = customDepth || activeRoom.depth;
     const effectiveWallColor = customWallColor || activeRoom.wallColor;
     const effectiveFloorColor = customFloorColor || activeRoom.floorColor;
+    const effectiveLShape = (customExtWidth > 0 && customExtDepth > 0)
+        ? { extWidth: customExtWidth, extDepth: customExtDepth, corner: customCorner }
+        : activeRoom.lShape;
     const selectedItem = placedItems.find(i => i.id === selectedId);
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -530,6 +580,11 @@ export default function DesignerWorkspace() {
             if (local.lightingMode) setLightingMode(local.lightingMode as LightingMode);
             if (local.customWidth) setCustomWidth(local.customWidth);
             if (local.customDepth) setCustomDepth(local.customDepth);
+            if (local.lShape) {
+                setCustomExtWidth(local.lShape.extWidth);
+                setCustomExtDepth(local.lShape.extDepth);
+                setCustomCorner(local.lShape.corner);
+            }
             if (local.lightPos) setLightPos(local.lightPos);
             return;
         }
@@ -553,6 +608,9 @@ export default function DesignerWorkspace() {
                 if (d.lighting_mode) setLightingMode(d.lighting_mode as LightingMode);
                 if (d.custom_width) setCustomWidth(d.custom_width);
                 if (d.custom_depth) setCustomDepth(d.custom_depth);
+                if (d.l_shape_ext_width) setCustomExtWidth(d.l_shape_ext_width);
+                if (d.l_shape_ext_depth) setCustomExtDepth(d.l_shape_ext_depth);
+                if (d.l_shape_corner) setCustomCorner(d.l_shape_corner as 'NE' | 'NW' | 'SE' | 'SW');
                 if (d.light_pos_x !== undefined) setLightPos({ x: d.light_pos_x, y: d.light_pos_y, z: d.light_pos_z });
             }
         })();
@@ -638,6 +696,21 @@ export default function DesignerWorkspace() {
 
     const handleResetCamera = () => { orbitControlsRef.current?.reset(); };
 
+    // ── Sharing ──────────────────────────────────────────────────────────────
+    const handleShareOpen = () => {
+        if (!currentDesignId) {
+            showToastMessage('Please save your design first before sharing.', 'error');
+            return;
+        }
+        if (glRef.current) {
+            const dataUrl = glRef.current.domElement.toDataURL('image/png');
+            setShareImageData(dataUrl);
+            setIsShareModalOpen(true);
+        } else {
+            showToastMessage('Could not capture design image. Please try again.', 'error');
+        }
+    };
+
     // ── New design ────────────────────────────────────────────────────────────
     const handleCreateNew = () => { setNewDesignName(''); setIsNewDesignModalOpen(true); };
     const confirmCreateNew = () => {
@@ -688,8 +761,8 @@ export default function DesignerWorkspace() {
                 floorColor: effectiveFloorColor,
                 wallTexture,
                 lightingMode,
-                customWidth: effectiveWidth,
                 customDepth: effectiveDepth,
+                lShape: effectiveLShape,
                 lightPos,
             };
 
@@ -714,7 +787,9 @@ export default function DesignerWorkspace() {
                     lighting_mode: lightingMode,
                     custom_width: effectiveWidth,
                     custom_depth: effectiveDepth,
-                    // Requires: ALTER TABLE saved_designs ADD COLUMN light_pos_x float DEFAULT 5, ADD COLUMN light_pos_y float DEFAULT 8, ADD COLUMN light_pos_z float DEFAULT 5;
+                    l_shape_ext_width: effectiveLShape?.extWidth,
+                    l_shape_ext_depth: effectiveLShape?.extDepth,
+                    l_shape_corner: effectiveLShape?.corner,
                     light_pos_x: lightPos.x,
                     light_pos_y: lightPos.y,
                     light_pos_z: lightPos.z,
@@ -839,6 +914,12 @@ export default function DesignerWorkspace() {
                                        border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
                             <Download size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
                             <span className="hidden sm:inline">Export</span>
+                        </button>
+                        <button onClick={handleShareOpen} title="Share with User"
+                            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
+                            <Share2 size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
+                            <span className="hidden sm:inline">Share</span>
                         </button>
                         <button onClick={handleCreateNew}
                             className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
@@ -1341,6 +1422,7 @@ export default function DesignerWorkspace() {
                             wallColor={effectiveWallColor}
                             floorColor={effectiveFloorColor}
                             wallTexture={wallTexture}
+                            lShape={effectiveLShape}
                             onDeselect={() => setSelectedId(null)}
                         />
 
@@ -1355,6 +1437,9 @@ export default function DesignerWorkspace() {
                                 updateItem={updateItem}
                                 setIsDragging={setIsDragging}
                                 snapToGrid={snapToGrid}
+                                roomWidth={effectiveWidth}
+                                roomDepth={effectiveDepth}
+                                lShape={effectiveLShape}
                             />
                         ))}
 
@@ -1388,6 +1473,15 @@ export default function DesignerWorkspace() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* ── Sharing Modal ── */}
+            <UserShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                designId={currentDesignId || ''}
+                designName={designName}
+                imageData={shareImageData}
+            />
         </div>
     );
 }

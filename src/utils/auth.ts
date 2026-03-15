@@ -28,7 +28,7 @@ export async function login(email: string, password: string): Promise<boolean> {
                 .select('role')
                 .eq('id', data.user.id)
                 .single();
-
+            
             const role = profile?.role || 'customer';
 
             // Cache the user info so existing synchronous UI components (like Navbar) still work seamlessly

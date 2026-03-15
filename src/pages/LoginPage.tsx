@@ -27,7 +27,12 @@ export default function LoginPage() {
             // Show full-screen success overlay, then redirect after 2 seconds
             setSuccess('Login successful...');
             setIsLoading(false);
-            setTimeout(() => navigate('/'), 2000);
+            
+            // Check role from auth helper
+            const { isAdmin } = await import('../utils/auth');
+            const targetPath = isAdmin() ? '/admin' : '/';
+            
+            setTimeout(() => navigate(targetPath), 2000);
         } else {
             setError('Invalid email or password. Please try again.');
             setIsLoading(false);
