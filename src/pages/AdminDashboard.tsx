@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Pagination from '../components/Pagination';
-import { Plus, X, Check, AlertCircle, ChevronDown, Clock, Loader2, Truck, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, X, Check, AlertCircle, ChevronDown, Clock, Loader2, Truck, CheckCircle2, XCircle, Trash2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Product, Order, SavedDesign } from '../types';
 
@@ -405,10 +405,11 @@ function OrdersTab() {
 }
 
 // --- DESIGNS TAB ---
-function DesignsTab() {
+function DesignsTab({ showToastMessage }: { showToastMessage: (msg: string, type?: 'success' | 'error') => void }) {
     const [designs, setDesigns] = useState<SavedDesign[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const itemsPerPage = 9;
 
     const fetchDesigns = useCallback(async () => {
@@ -426,6 +427,23 @@ function DesignsTab() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [currentPage]);
 
+    const confirmDelete = async () => {
+        if (!confirmDeleteId) return;
+        const id = confirmDeleteId;
+        setConfirmDeleteId(null);
+        const { error } = await supabase.from('saved_designs').delete().eq('id', id);
+        if (error) {
+            console.error('Error deleting design:', error);
+            showToastMessage('Failed to delete design', 'error');
+            return;
+        }
+
+        setDesigns(prev => prev.filter(d => d.id !== id));
+        showToastMessage('Design permanently deleted');
+    };
+
+    const designToDelete = designs.find(d => d.id === confirmDeleteId);
+
     const totalPages = Math.ceil(designs.length / itemsPerPage);
     const paginatedDesigns = designs.slice(
         (currentPage - 1) * itemsPerPage,
@@ -434,6 +452,62 @@ function DesignsTab() {
 
     return (
         <div>
+            {/* ── Confirm Delete Modal ── */}
+            <AnimatePresence>
+                {confirmDeleteId && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-sm"
+                        onClick={() => setConfirmDeleteId(null)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                            className="bg-white w-full max-w-sm p-8 shadow-2xl border border-stone-light relative"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="absolute top-5 right-5 p-1.5 text-charcoal/30 hover:text-charcoal transition-all"
+                            >
+                                <X size={16} strokeWidth={1.5} />
+                            </button>
+
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2.5 bg-red-50">
+                                    <AlertTriangle size={20} className="text-red-500" strokeWidth={1.5} />
+                                </div>
+                                <h3 className="text-xl font-serif text-charcoal">Delete Design</h3>
+                            </div>
+
+                            <p className="text-sm text-charcoal/55 mb-8 leading-relaxed">
+                                Permanently delete <strong className="text-charcoal">"{designToDelete?.name || 'this design'}"</strong>? This cannot be undone and will remove it from all customer views.
+                            </p>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-5 py-2.5 text-[11px] tracking-[0.1em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    className="px-6 py-2.5 text-[11px] tracking-[0.1em] uppercase font-medium bg-red-500 text-white hover:bg-red-600 transition-all duration-300 flex items-center gap-2"
+                                >
+                                    <Trash2 size={13} strokeWidth={1.5} />
+                                    Delete
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-serif text-charcoal">Designer Gallery</h2>
                 <Link 
@@ -462,12 +536,21 @@ function DesignsTab() {
                             
                             <div className="pt-4 border-t border-stone-light flex justify-between items-center">
                                 <span className="text-[11px] font-mono text-charcoal/40 bg-stone-light px-2 py-1">ID: ...{d.id.slice(-6)}</span>
-                                <Link
-                                    to={`/designer?designId=${d.id}`}
-                                    className="text-[12px] tracking-[0.1em] uppercase text-sage hover:text-sage-dark font-medium transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                    Load in Designer →
-                                </Link>
+                                <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Link
+                                        to={`/designer?designId=${d.id}`}
+                                        className="text-[12px] tracking-[0.1em] uppercase text-sage hover:text-sage-dark font-medium transition-colors"
+                                    >
+                                        Load in Designer →
+                                    </Link>
+                                    <button
+                                        onClick={() => setConfirmDeleteId(d.id)}
+                                        className="p-1.5 text-charcoal/30 hover:text-red-500 hover:bg-red-50 transition-all"
+                                        title="Delete design"
+                                    >
+                                        <Trash2 size={14} strokeWidth={1.5} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -492,6 +575,12 @@ function DesignsTab() {
 // --- MAIN DASHBOARD LAYER ---
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'designs'>('products');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
+      setToast({ message, type });
+      setTimeout(() => setToast(null), 3000);
+  };
 
   return (
     <div className="min-h-screen flex flex-col pt-20 bg-warm-white">
@@ -524,11 +613,29 @@ export default function AdminDashboard() {
         <div className="bg-white border border-stone-light p-8 min-h-[50vh]">
             {activeTab === 'products' && <ProductsTab />}
             {activeTab === 'orders' && <OrdersTab />}
-            {activeTab === 'designs' && <DesignsTab />}
+            {activeTab === 'designs' && <DesignsTab showToastMessage={showToastMessage} />}
         </div>
       </main>
 
       <Footer />
+
+      {/* ── Toast ── */}
+      <AnimatePresence>
+          {toast && (
+              <motion.div
+                  initial={{ opacity: 0, y: 40, scale: 0.92 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.92 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none border border-white/5"
+              >
+                  <div className={`p-1.5 rounded-full ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
+                      {toast.type === 'success' ? <Check size={12} strokeWidth={3} /> : <AlertCircle size={12} strokeWidth={3} />}
+                  </div>
+                  <span className="text-[12px] tracking-wide font-medium">{toast.message}</span>
+              </motion.div>
+          )}
+      </AnimatePresence>
     </div>
   );
 }

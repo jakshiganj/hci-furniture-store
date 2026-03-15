@@ -9,7 +9,11 @@ import {
     Package, 
     Calendar,
     ChevronRight,
-    Search
+    Search,
+    Trash2,
+    AlertTriangle,
+    Check,
+    AlertCircle
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -22,7 +26,14 @@ export default function MyDesigns() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const user = getUser();
+
+    const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     useEffect(() => {
         if (!user?.id) return;
@@ -67,14 +78,93 @@ export default function MyDesigns() {
         document.body.removeChild(link);
     };
 
+    const handleDelete = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setConfirmDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!confirmDeleteId || !user?.id) return;
+        const id = confirmDeleteId;
+        setConfirmDeleteId(null);
+
+        // Remove the share record so the customer no longer sees it
+        await supabase
+            .from('design_shares')
+            .delete()
+            .eq('design_id', id)
+            .eq('shared_with_user_id', user.id);
+
+        setDesigns(prev => prev.filter(d => d.id !== id));
+        showToastMessage('Design removed from your collection');
+    };
+
     const filteredDesigns = designs.filter(d => 
         d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.roomType.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const designToDelete = designs.find(d => d.id === confirmDeleteId);
+
     return (
         <div className="min-h-screen bg-warm-white flex flex-col font-inter">
             <Navbar />
+
+            {/* ── Confirm Delete Modal ── */}
+            <AnimatePresence>
+                {confirmDeleteId && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-sm"
+                        onClick={() => setConfirmDeleteId(null)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                            className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl border border-stone-light/50 relative"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="absolute top-5 right-5 p-1.5 rounded-lg text-charcoal/30 hover:text-charcoal hover:bg-stone-light/40 transition-all"
+                            >
+                                <X size={16} strokeWidth={1.5} />
+                            </button>
+
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2.5 rounded-xl bg-red-50">
+                                    <AlertTriangle size={20} className="text-red-500" strokeWidth={1.5} />
+                                </div>
+                                <h3 className="text-xl font-serif text-charcoal">Remove Design</h3>
+                            </div>
+
+                            <p className="text-sm text-charcoal/55 mb-8 leading-relaxed">
+                                Remove <strong className="text-charcoal">"{designToDelete?.name || 'this design'}"</strong> from your collection? You can always ask the designer to share it again.
+                            </p>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-5 py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    className="px-6 py-2.5 rounded-lg text-[11px] tracking-[0.1em] uppercase font-medium bg-red-500 text-white hover:bg-red-600 transition-all duration-300 flex items-center gap-2 shadow-sm hover:shadow-md"
+                                >
+                                    <Trash2 size={13} strokeWidth={1.5} />
+                                    Remove
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             
             <main className="flex-1 pt-32 pb-24">
                 <div className="mx-auto max-w-7xl px-6 lg:px-10">
@@ -169,6 +259,13 @@ export default function MyDesigns() {
                                                     >
                                                         <Download size={20} />
                                                     </button>
+                                                    <button 
+                                                        onClick={(e) => handleDelete(e, design.id)}
+                                                        className="p-4 bg-red-500 text-white rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-[225ms]"
+                                                        title="Remove Design"
+                                                    >
+                                                        <Trash2 size={20} />
+                                                    </button>
                                                 </div>
                                             </>
                                         ) : (
@@ -193,9 +290,18 @@ export default function MyDesigns() {
                                             <span className="w-1 h-1 bg-charcoal/10 rounded-full"></span>
                                             <span className="text-[10px] font-semibold tracking-wider uppercase">High res</span>
                                         </div>
-                                        <h3 className="text-2xl font-serif text-charcoal group-hover:text-sage transition-colors duration-300">
-                                            {design.name}
-                                        </h3>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <h3 className="text-2xl font-serif text-charcoal group-hover:text-sage transition-colors duration-300">
+                                                {design.name}
+                                            </h3>
+                                            <button
+                                                onClick={(e) => handleDelete(e, design.id)}
+                                                className="flex-shrink-0 mt-1.5 p-1.5 rounded-lg text-charcoal/25 hover:text-red-500 hover:bg-red-50 transition-all duration-300"
+                                                title="Remove Design"
+                                            >
+                                                <Trash2 size={15} strokeWidth={1.5} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </motion.div>
                             ))}
@@ -266,6 +372,24 @@ export default function MyDesigns() {
             </AnimatePresence>
 
             <Footer />
+
+            {/* ── Toast ── */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 40, scale: 0.92 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.92 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="fixed bottom-8 right-8 bg-charcoal text-white pl-5 pr-6 py-4 rounded-xl shadow-2xl flex items-center gap-3.5 z-50 pointer-events-none border border-white/5"
+                    >
+                        <div className={`p-1.5 rounded-full ${toast.type === 'success' ? 'bg-sage' : 'bg-red-400'}`}>
+                            {toast.type === 'success' ? <Check size={12} strokeWidth={3} /> : <AlertCircle size={12} strokeWidth={3} />}
+                        </div>
+                        <span className="text-[12px] tracking-wide font-medium">{toast.message}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
