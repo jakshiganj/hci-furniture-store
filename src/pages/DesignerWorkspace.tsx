@@ -110,6 +110,48 @@ function isInsideLShape(
     return false;
 }
 
+function clampToRoom(
+    x: number,
+    z: number,
+    roomWidth: number,
+    roomDepth: number,
+    itemWidth: number,
+    itemDepth: number,
+    rotationY: number,
+    lShape?: { extWidth: number; extDepth: number; corner: 'NE' | 'NW' | 'SE' | 'SW' }
+): { x: number; z: number } {
+    // Calculate effective footprint based on Y rotation
+    const cos = Math.abs(Math.cos(rotationY));
+    const sin = Math.abs(Math.sin(rotationY));
+    const effectiveWidth = itemWidth * cos + itemDepth * sin;
+    const effectiveDepth = itemWidth * sin + itemDepth * cos;
+
+    const margin = 0.02; // Small buffer to prevent visual clipping
+    const hw = Math.max(0, roomWidth / 2 - effectiveWidth / 2 - margin);
+    const hd = Math.max(0, roomDepth / 2 - effectiveDepth / 2 - margin);
+
+    // If it's a simple rectangular room, just clamp
+    if (!lShape) {
+        return {
+            x: Math.max(-hw, Math.min(hw, x)),
+            z: Math.max(-hd, Math.min(hd, z)),
+        };
+    }
+
+    // For L-shapes, we check if the point is inside. 
+    // If it is, we allow it (the isInsideLShape check is point-based for now, 
+    // which is usually enough for the extension part).
+    if (isInsideLShape(x, z, roomWidth, roomDepth, lShape)) {
+        return { x, z };
+    }
+
+    // Otherwise clamp to the main room rectangle
+    return {
+        x: Math.max(-hw, Math.min(hw, x)),
+        z: Math.max(-hd, Math.min(hd, z)),
+    };
+}
+
 const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, number]; castShadow?: boolean; receiveShadow?: boolean }>> = {
     chair: ChairModel,
     table: TableModel,
@@ -300,7 +342,9 @@ function Model({
                                 const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
                                 const nx = snap(pt.x + dragOffset.current.x);
                                 const nz = snap(pt.z + dragOffset.current.z);
-                                groupRef.current.position.set(nx, 0, nz);
+                                
+                                const clamped = clampToRoom(nx, nz, roomWidth, roomDepth, bbox[0], bbox[2], item.rotation[1], lShape);
+                                groupRef.current.position.set(clamped.x, 0, clamped.z);
                             } : undefined}
                             onPointerUp={transformMode === 'translate' && isSelected ? () => {
                                 if (!isDragging.current) return;
@@ -329,7 +373,9 @@ function Model({
                                 const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
                                 const nx = snap(pt.x + dragOffset.current.x);
                                 const nz = snap(pt.z + dragOffset.current.z);
-                                groupRef.current.position.set(nx, 0, nz);
+                                
+                                const clamped = clampToRoom(nx, nz, roomWidth, roomDepth, bbox[0], bbox[2], item.rotation[1], lShape);
+                                groupRef.current.position.set(clamped.x, 0, clamped.z);
                             } : undefined}
                             onPointerUp={transformMode === 'translate' && isSelected ? () => {
                                 if (!isDragging.current) return;
@@ -360,11 +406,9 @@ function Model({
                             const pt = getFloorPoint(e.nativeEvent.clientX, e.nativeEvent.clientY);
                             const nx = snap(pt.x + dragOffset.current.x);
                             const nz = snap(pt.z + dragOffset.current.z);
-
-                            // L-shape bounds check
-                            if (isInsideLShape(nx, nz, roomWidth, roomDepth, lShape)) {
-                                groupRef.current.position.set(nx, 0, nz);
-                            }
+                            
+                            const clamped = clampToRoom(nx, nz, roomWidth, roomDepth, bbox[0], bbox[2], item.rotation[1], lShape);
+                            groupRef.current.position.set(clamped.x, 0, clamped.z);
                         } : undefined}
                         onPointerUp={transformMode === 'translate' && isSelected ? () => {
                             if (!isDragging.current) return;
