@@ -41,6 +41,8 @@ import WardrobeModel from '../components/models/WardrobeModel';
 import FloorLampModel from '../components/models/FloorLampModel';
 import TVStandModel from '../components/models/TVStandModel';
 import UserShareModal from '../components/UserShareModal';
+import Tooltip from '../components/Tooltip';
+import Compass from '../components/3d/Compass';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -900,7 +902,9 @@ export default function DesignerWorkspace() {
                                 onClick={() => navigate('/')}
                                 className="group inline-flex items-center gap-2 text-[12px] tracking-[0.12em] uppercase text-charcoal/50 hover:text-charcoal transition-colors duration-300"
                             >
-                                <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
+                                <Tooltip content="Go back to home" position="bottom">
+                                    <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
+                                </Tooltip>
                                 <span className="hidden sm:inline">Back</span>
                             </button>
                         <div className="w-px h-7 bg-stone-light" />
@@ -951,33 +955,45 @@ export default function DesignerWorkspace() {
                     {/* Right: actions */}
                     <div className="flex items-center gap-2 sm:gap-3">
                         <div className="hidden sm:flex items-center gap-1.5 mr-2">
-                            <button onClick={handleUndo} disabled={historyIndex <= 0}
-                                className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Undo"><Undo2 size={16} strokeWidth={1.5} /></button>
-                            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1}
-                                className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-                                title="Redo"><Redo2 size={16} strokeWidth={1.5} /></button>
+                            <Tooltip content="Undo (Ctrl+Z)" position="bottom">
+                                <button onClick={handleUndo} disabled={historyIndex <= 0}
+                                    className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                    title="Undo"><Undo2 size={16} strokeWidth={1.5} /></button>
+                            </Tooltip>
+                            <Tooltip content="Redo (Ctrl+Y)" position="bottom">
+                                <button onClick={handleRedo} disabled={historyIndex >= history.length - 1}
+                                    className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                                    title="Redo"><Redo2 size={16} strokeWidth={1.5} /></button>
+                            </Tooltip>
                         </div>
                         <div className="hidden sm:block w-px h-6 bg-stone-light mr-1" />
                         
                         {/* Desktop Only Actions */}
                         <div className="hidden lg:flex items-center gap-2 mr-2">
-                            <button onClick={handleExportImage} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="Export as Image">
-                                <Download size={16} strokeWidth={1.5} />
-                            </button>
-                            <button onClick={handleShareOpen} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="Share Design">
-                                <Share2 size={16} strokeWidth={1.5} />
-                            </button>
-                            <button onClick={handleCreateNew} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="New Design">
-                                <FilePlus size={16} strokeWidth={1.5} />
-                            </button>
+                            <Tooltip content="Export as Image" position="bottom">
+                                <button onClick={handleExportImage} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">
+                                    <Download size={16} strokeWidth={1.5} />
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="Share Design" position="bottom">
+                                <button onClick={handleShareOpen} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">
+                                    <Share2 size={16} strokeWidth={1.5} />
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="New Design" position="bottom">
+                                <button onClick={handleCreateNew} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300">
+                                    <FilePlus size={16} strokeWidth={1.5} />
+                                </button>
+                            </Tooltip>
                         </div>
                         <div className="hidden lg:block w-px h-6 bg-stone-light mr-1" />
 
-                        <button onClick={handleResetCamera} title="Reset Camera"
-                            className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 sm:mr-2">
-                            <CameraIcon size={16} strokeWidth={1.5} />
-                        </button>
+                        <Tooltip content="Reset Camera" position="bottom">
+                            <button onClick={handleResetCamera}
+                                className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 sm:mr-2">
+                                <CameraIcon size={16} strokeWidth={1.5} />
+                            </button>
+                        </Tooltip>
                         <button onClick={handleSave} disabled={isSaving}
                             className="group inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
                                        bg-charcoal text-white hover:bg-charcoal-light disabled:opacity-40 disabled:cursor-not-allowed
@@ -1134,10 +1150,10 @@ export default function DesignerWorkspace() {
                             {sidebarMode === 'room' ? (
                                 <motion.div
                                     key="room"
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -10 }}
-                                    transition={{ duration: 0.2 }}
+                                    initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }}
+                                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                    exit={{ opacity: 0, x: -20, filter: 'blur(10px)' }}
+                                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                                     className="flex flex-col pb-8"
                                 >
                                     {/* ─ Room type ─ */}
@@ -1288,10 +1304,10 @@ export default function DesignerWorkspace() {
                             ) : (
                                 <motion.div
                                     key="furniture"
-                                    initial={{ opacity: 0, x: 10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 10 }}
-                                    transition={{ duration: 0.2 }}
+                                    initial={{ opacity: 0, x: 20, filter: 'blur(10px)' }}
+                                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                    exit={{ opacity: 0, x: 20, filter: 'blur(10px)' }}
+                                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                                     className="flex flex-col h-full"
                                 >
                                     {/* ─ Transform Tools ─ */}
@@ -1570,6 +1586,12 @@ export default function DesignerWorkspace() {
                                 lShape={effectiveLShape}
                             />
                         ))}
+                        {/* ── Compass (own Suspense so font failures don't blank the scene) ── */}
+                        {viewMode === '3d' && (
+                            <Suspense fallback={null}>
+                                <Compass />
+                            </Suspense>
+                        )}
 
                         {/* ── Orbit controls ── */}
                         <OrbitControls
