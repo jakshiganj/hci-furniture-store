@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import Pagination from '../components/Pagination';
 import { Plus, X, Check, AlertCircle, ChevronDown, Clock, Loader2, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Product, Order, SavedDesign } from '../types';
@@ -36,7 +37,7 @@ function StatusDropdown({ value, onChange }: { value: Order['status']; onChange:
         <div ref={dropdownRef} className="relative inline-block">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center gap-2 pr-7 pl-3 py-1.5 text-[11px] font-medium uppercase tracking-wider rounded-full border transition-all cursor-pointer
+                className={`flex items-center gap-2 pr-7 pl-3 py-1.5 text-[11px] font-medium uppercase tracking-wider rounded-none border transition-all cursor-pointer
                     ${isOpen ? 'border-sage shadow-sm' : 'border-transparent hover:border-charcoal/20'}
                     ${active.bg} ${active.color}`}
             >
@@ -58,7 +59,7 @@ function StatusDropdown({ value, onChange }: { value: Order['status']; onChange:
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -4, scale: 0.95 }}
                         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute left-0 top-full mt-2 w-48 bg-white/95 backdrop-blur-xl border border-stone-light shadow-xl z-50 overflow-hidden rounded-lg"
+                        className="absolute left-0 top-full mt-2 w-48 bg-white/95 backdrop-blur-xl border border-stone-light shadow-xl z-50 overflow-hidden rounded-none"
                     >
                         {orderStatusOptions.map((option) => (
                             <button
@@ -89,6 +90,8 @@ function ProductsTab() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     
     // Form state
     const [newName, setNewName] = useState('');
@@ -112,6 +115,17 @@ function ProductsTab() {
     useEffect(() => {
         Promise.resolve().then(() => fetchProducts());
     }, [fetchProducts]);
+
+    // Scroll to top when page changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
+
+    const totalPages = Math.ceil(products.length / itemsPerPage);
+    const paginatedProducts = products.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     async function toggleActive(id: string, currentStatus: boolean) {
         setLoading(true);
@@ -170,13 +184,13 @@ function ProductsTab() {
                             </tr>
                         </thead>
                         <tbody>
-                            {products.map(p => (
+                            {paginatedProducts.map(p => (
                                 <tr key={p.id} className="border-b border-stone-light/50 hover:bg-stone-light/20 transition-colors">
                                     <td className="py-4 px-4 font-serif">{p.name}</td>
                                     <td className="py-4 px-4 text-sm text-charcoal/70">{p.category}</td>
                                     <td className="py-4 px-4">${p.price.toLocaleString()}</td>
                                     <td className="py-4 px-4">
-                                        <span className={`px-2 py-1 text-[10px] uppercase tracking-wider rounded-full ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`px-2 py-1 text-[10px] uppercase tracking-wider rounded-none ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                             {p.is_active ? 'Active' : 'Hidden'}
                                         </span>
                                     </td>
@@ -194,6 +208,12 @@ function ProductsTab() {
                             )}
                         </tbody>
                     </table>
+                    
+                    <Pagination 
+                        currentPage={currentPage} 
+                        totalPages={totalPages} 
+                        onPageChange={setCurrentPage} 
+                    />
                 </div>
             )}
 
@@ -297,6 +317,8 @@ function ProductsTab() {
 function OrdersTab() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const fetchOrders = useCallback(async () => {
         const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
@@ -307,6 +329,17 @@ function OrdersTab() {
     useEffect(() => {
         Promise.resolve().then(() => fetchOrders());
     }, [fetchOrders]);
+
+    // Scroll to top when page changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
+
+    const totalPages = Math.ceil(orders.length / itemsPerPage);
+    const paginatedOrders = orders.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     async function updateOrderStatus(id: string, newStatus: Order['status']) {
         // Optimistically update local state for snappy UX
@@ -336,7 +369,7 @@ function OrdersTab() {
                             </tr>
                         </thead>
                         <tbody>
-                            {orders.map(o => (
+                            {paginatedOrders.map(o => (
                                 <tr key={o.id} className="border-b border-stone-light/50 hover:bg-stone-light/20 transition-colors">
                                     <td className="py-4 px-4 text-[12px] font-mono text-charcoal/60">...{o.id.slice(-8)}</td>
                                     <td className="py-4 px-4">
@@ -359,6 +392,12 @@ function OrdersTab() {
                             )}
                         </tbody>
                     </table>
+
+                    <Pagination 
+                        currentPage={currentPage} 
+                        totalPages={totalPages} 
+                        onPageChange={setCurrentPage} 
+                    />
                 </div>
             )}
         </div>
@@ -369,6 +408,8 @@ function OrdersTab() {
 function DesignsTab() {
     const [designs, setDesigns] = useState<SavedDesign[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9;
 
     const fetchDesigns = useCallback(async () => {
         const { data, error } = await supabase.from('saved_designs').select('*').order('created_at', { ascending: false });
@@ -380,13 +421,24 @@ function DesignsTab() {
         Promise.resolve().then(() => fetchDesigns());
     }, [fetchDesigns]);
 
+    // Scroll to top when page changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
+
+    const totalPages = Math.ceil(designs.length / itemsPerPage);
+    const paginatedDesigns = designs.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-serif text-charcoal">Designer Gallery</h2>
                 <Link 
                     to="/configure"
-                    className="flex items-center gap-2 px-6 py-2 bg-charcoal text-white rounded-xl text-sm font-medium hover:bg-charcoal/90 transition-all hover:shadow-lg active:scale-95"
+                    className="flex items-center gap-2 px-6 py-2 bg-charcoal text-white rounded-none text-sm font-medium hover:bg-charcoal/90 transition-all hover:shadow-lg active:scale-95"
                 >
                     <Plus size={16} />
                     New Design
@@ -396,8 +448,9 @@ function DesignsTab() {
             {loading ? (
                 <div className="text-center py-10 text-charcoal/50">Loading designs...</div>
             ) : (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {designs.map(d => (
+                    {paginatedDesigns.map(d => (
                         <div key={d.id} className="border border-stone-light p-6 hover:shadow-md transition-shadow relative group">
                             <h3 className="font-serif text-xl text-charcoal mb-2">{d.name || 'Untitled Room'}</h3>
                             <div className="text-[11px] uppercase tracking-wider text-charcoal/50 mb-4">{new Date(d.created_at).toLocaleString()}</div>
@@ -424,6 +477,13 @@ function DesignsTab() {
                         </div>
                     )}
                 </div>
+
+                <Pagination 
+                    currentPage={currentPage} 
+                    totalPages={totalPages} 
+                    onPageChange={setCurrentPage} 
+                />
+                </>
             )}
         </div>
     );

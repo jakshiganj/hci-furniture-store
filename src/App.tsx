@@ -7,9 +7,7 @@ import Marquee from './components/Marquee'
 import Features from './components/Features'
 import ProductGrid from './components/ProductGrid'
 import Collections from './components/Collections'
-import CreateDesign from './components/CreateDesign'
 // Persistence: display saved designs on the home page
-import SavedDesigns from './components/SavedDesigns'
 import Testimonials from './components/Testimonials'
 import ImageMarquee from './components/ImageMarquee'
 import Newsletter from './components/Newsletter'
@@ -35,9 +33,6 @@ function HomePage() {
       <Hero />
       <Marquee />
       <Features />
-      <CreateDesign />
-      {/* Persistence: show saved designs below the create section */}
-      <SavedDesigns />
       <ProductGrid />
       <Collections />
       <Testimonials />
@@ -73,12 +68,12 @@ function App() {
 
         {/* Protected Customer Routes: Designer */}
         <Route path="/configure" element={
-          <ProtectedRoute>
+          <ProtectedRoute requireAdmin={true}>
             <RoomConfigurator />
           </ProtectedRoute>
         } />
         <Route path="/designer" element={
-          <ProtectedRoute>
+          <ProtectedRoute requireAdmin={true}>
             <DesignerWorkspace />
           </ProtectedRoute>
         } />

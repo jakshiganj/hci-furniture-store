@@ -23,7 +23,6 @@ export default function Navbar() {
   const location = useLocation();
   const { totalItemsCount } = useCart();
   
-  const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/designer');
 
   const handleLogout = () => {
     logout();
@@ -55,9 +54,8 @@ export default function Navbar() {
               CeylonVista
             </Link>
 
-            {/* Desktop Nav */}
             <div className="hidden lg:flex items-center gap-6 xl:gap-8">
-              {!isAdminPage && navLinks.map((link) => (
+              {!adminLevel && navLinks.map((link) => (
                 link.isRoute ? (
                   <Link
                     key={link.name}
@@ -89,13 +87,13 @@ export default function Navbar() {
               ))}
               {adminLevel && (
                   <>
-                    <Link to="/designer" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                    <Link to="/designer" className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors relative group">
                         Designer
-                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
                     </Link>
-                    <Link to="/admin" className="text-[13px] tracking-[0.15em] uppercase text-sage font-bold hover:text-sage/80 transition-colors relative group">
+                    <Link to="/admin" className="text-[13px] tracking-[0.15em] uppercase text-charcoal/70 hover:text-charcoal transition-colors relative group">
                         Admin
-                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-sage group-hover:w-full transition-all duration-300" />
+                        <span className="absolute -bottom-1 left-0 w-0 h-px bg-charcoal group-hover:w-full transition-all duration-300" />
                     </Link>
                   </>
               )}
@@ -106,7 +104,7 @@ export default function Navbar() {
               <button className="hidden lg:block text-charcoal/70 hover:text-charcoal transition-colors" aria-label="Search">
                 <Search size={18} strokeWidth={1.5} />
               </button>
-              {loggedIn && (
+              {loggedIn && !adminLevel && (
                 <Link to="/orders" className="text-charcoal/70 hover:text-charcoal transition-colors" aria-label="My Orders" title="My Orders">
                   <Package size={18} strokeWidth={1.5} />
                 </Link>
@@ -174,7 +172,7 @@ export default function Navbar() {
               </button>
             </div>
             <div className="flex flex-col items-center justify-center flex-1 gap-8">
-              {!isAdminPage && navLinks.map((link, i) => (
+              {!adminLevel && navLinks.map((link, i) => (
                 link.isRoute ? (
                   <motion.div
                     key={link.name}
@@ -213,7 +211,7 @@ export default function Navbar() {
                   </motion.button>
                 )
               ))}
-              {loggedIn && (
+              {loggedIn && !adminLevel && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -238,14 +236,14 @@ export default function Navbar() {
                     >
                         <Link 
                             to="/designer" 
-                            className="text-2xl font-serif text-sage"
+                            className="text-3xl font-serif text-charcoal"
                             onClick={() => setIsMobileOpen(false)}
                         >
                             Designer
                         </Link>
                         <Link 
                             to="/admin" 
-                            className="text-2xl font-serif text-sage"
+                            className="text-3xl font-serif text-charcoal"
                             onClick={() => setIsMobileOpen(false)}
                         >
                             Admin

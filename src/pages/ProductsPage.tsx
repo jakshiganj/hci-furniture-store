@@ -4,6 +4,7 @@ import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, ArrowUpRight, X, ShoppingBag, ChevronDown, Check } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import Pagination from '../components/Pagination';
 import { supabase } from '../utils/supabase';
 import type { Product } from '../types';
 
@@ -151,6 +152,8 @@ export default function ProductsPage() {
     const [activeCategory, setActiveCategory] = useState('All');
     const [sortBy, setSortBy] = useState<SortOption>('newest');
     const [showFilters, setShowFilters] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 6;
     const headerRef = useRef(null);
     const headerInView = useInView(headerRef, { once: true });
 
@@ -170,6 +173,16 @@ export default function ProductsPage() {
         }
         fetchProducts();
     }, []);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, activeCategory, sortBy]);
+
+    // Scroll to top when page changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
 
     // Derive unique categories from fetched products
     const categories = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
@@ -192,6 +205,13 @@ export default function ProductsPage() {
                 default: return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             }
         });
+
+    // Pagination logic
+    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+    const paginatedProducts = filteredProducts.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     return (
         <div className="min-h-screen flex flex-col pt-20 bg-warm-white">
@@ -383,10 +403,16 @@ export default function ProductsPage() {
                                     </p>
 
                                     <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-8 lg:gap-10">
-                                        {filteredProducts.map((product, i) => (
+                                        {paginatedProducts.map((product, i) => (
                                             <ProductCard key={product.id} product={product} index={i} />
                                         ))}
                                     </div>
+
+                                    <Pagination 
+                                        currentPage={currentPage} 
+                                        totalPages={totalPages} 
+                                        onPageChange={setCurrentPage} 
+                                    />
                                 </>
                             )}
                         </div>

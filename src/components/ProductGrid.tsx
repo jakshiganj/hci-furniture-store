@@ -64,7 +64,8 @@ export default function ProductGrid() {
                 .from('products')
                 .select('*')
                 .eq('is_active', true)
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: true })
+                .limit(3);
                 
             if (!error && data) {
                 setProducts(data);
