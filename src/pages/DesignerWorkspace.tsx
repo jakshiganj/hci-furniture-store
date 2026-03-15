@@ -4,7 +4,7 @@ import {
     ArrowLeft, Box as BoxIcon, Move, RotateCw, X, Check,
     AlertCircle, LayoutTemplate, Trash2, Plus, Save, FilePlus, Armchair,
     Undo2, Redo2, Camera as CameraIcon, Copy, Grid as GridIcon, Download,
-    Paintbrush, Sun, ArrowRight, Share2
+    Paintbrush, Sun, ArrowRight, Share2, Menu, Settings
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -536,6 +536,15 @@ export default function DesignerWorkspace() {
     const [saveNameInput, setSaveNameInput] = useState('');
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [shareImageData, setShareImageData] = useState('');
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // ── Refs ─────────────────────────────────────────────────────────────────
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -842,14 +851,14 @@ export default function DesignerWorkspace() {
 
                     {/* Left */}
                     <div className="flex items-center gap-5">
-                        <button
-                            type="button"
-                            onClick={() => navigate('/')}
-                            className="group inline-flex items-center gap-2 text-[12px] tracking-[0.12em] uppercase text-charcoal/50 hover:text-charcoal transition-colors duration-300"
-                        >
-                            <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
-                            Back
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/')}
+                                className="group inline-flex items-center gap-2 text-[12px] tracking-[0.12em] uppercase text-charcoal/50 hover:text-charcoal transition-colors duration-300"
+                            >
+                                <ArrowLeft size={14} strokeWidth={1.5} className="group-hover:-translate-x-0.5 transition-transform duration-300" />
+                                <span className="hidden sm:inline">Back</span>
+                            </button>
                         <div className="w-px h-7 bg-stone-light" />
                         <div>
                             {isEditingName ? (
@@ -864,21 +873,22 @@ export default function DesignerWorkspace() {
                             ) : (
                                 <button
                                     onClick={() => setIsEditingName(true)}
-                                    className="font-serif text-xl text-charcoal hover:text-sage-dark transition-colors duration-300 cursor-text flex items-center gap-2.5 group"
+                                    className="font-serif text-lg sm:text-xl text-charcoal hover:text-sage-dark transition-colors duration-300 cursor-text flex items-center gap-2.5 group"
                                     title="Click to rename"
                                 >
                                     {designName || 'Untitled Room'}
-                                    <span className="text-[9px] text-charcoal/20 group-hover:text-sage font-sans uppercase tracking-[0.15em] transition-colors duration-300">rename</span>
+                                    <span className="hidden sm:inline text-[9px] text-charcoal/20 group-hover:text-sage font-sans uppercase tracking-[0.15em] transition-colors duration-300">rename</span>
                                 </button>
                             )}
-                            <p className="text-[10px] text-charcoal/35 uppercase tracking-[0.2em] mt-0.5 font-medium">
-                                {currentDesignId ? '● Saved' : '○ Unsaved draft'}
+                            <p className="text-[10px] text-charcoal/35 uppercase tracking-[0.2em] mt-0.5 font-medium flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
+                                {currentDesignId ? 'Saved' : 'Unsaved draft'}
                             </p>
                         </div>
                     </div>
 
-                    {/* Center: view toggle */}
-                    <div className="flex items-center bg-stone-light/30 border border-stone-light/60 p-1 rounded-lg">
+                    {/* Center: view toggle - hidden on very small screens, or moved */}
+                    <div className="hidden md:flex items-center bg-stone-light/30 border border-stone-light/60 p-1 rounded-lg">
                         {(['2d', '3d'] as const).map((mode) => (
                             <button
                                 key={mode}
@@ -895,8 +905,8 @@ export default function DesignerWorkspace() {
                     </div>
 
                     {/* Right: actions */}
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 mr-2">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="hidden sm:flex items-center gap-1.5 mr-2">
                             <button onClick={handleUndo} disabled={historyIndex <= 0}
                                 className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
                                 title="Undo"><Undo2 size={16} strokeWidth={1.5} /></button>
@@ -904,35 +914,41 @@ export default function DesignerWorkspace() {
                                 className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
                                 title="Redo"><Redo2 size={16} strokeWidth={1.5} /></button>
                         </div>
-                        <div className="w-px h-6 bg-stone-light mr-1" />
+                        <div className="hidden sm:block w-px h-6 bg-stone-light mr-1" />
+                        
+                        {/* Desktop Only Actions */}
+                        <div className="hidden lg:flex items-center gap-2 mr-2">
+                            <button onClick={handleExportImage} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="Export as Image">
+                                <Download size={16} strokeWidth={1.5} />
+                            </button>
+                            <button onClick={handleShareOpen} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="Share Design">
+                                <Share2 size={16} strokeWidth={1.5} />
+                            </button>
+                            <button onClick={handleCreateNew} className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300" title="New Design">
+                                <FilePlus size={16} strokeWidth={1.5} />
+                            </button>
+                        </div>
+                        <div className="hidden lg:block w-px h-6 bg-stone-light mr-1" />
+
                         <button onClick={handleResetCamera} title="Reset Camera"
-                            className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 mr-2">
+                            className="p-2 rounded-lg text-charcoal/50 hover:text-charcoal hover:bg-stone-light/30 transition-all duration-300 sm:mr-2">
                             <CameraIcon size={16} strokeWidth={1.5} />
                         </button>
-                        <button onClick={handleExportImage} title="Export as PNG"
-                            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
-                            <Download size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
-                            <span className="hidden sm:inline">Export</span>
-                        </button>
-                        <button onClick={handleShareOpen} title="Share with User"
-                            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
-                            <Share2 size={14} strokeWidth={1.5} className="group-hover:-translate-y-0.5 transition-transform duration-300" />
-                            <span className="hidden sm:inline">Share</span>
-                        </button>
-                        <button onClick={handleCreateNew}
-                            className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
-                                       border border-stone-light text-charcoal/60 hover:text-charcoal hover:border-charcoal/30 hover:bg-stone-light/20 transition-all duration-300">
-                            <FilePlus size={14} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-300" />
-                            New
-                        </button>
                         <button onClick={handleSave} disabled={isSaving}
-                            className="group inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
+                            className="group inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-lg text-[11px] tracking-[0.12em] uppercase font-medium
                                        bg-charcoal text-white hover:bg-charcoal-light disabled:opacity-40 disabled:cursor-not-allowed
                                        transition-all duration-300 shadow-sm hover:shadow-md">
                             <Save size={14} strokeWidth={1.5} className={isSaving ? 'animate-pulse' : 'group-hover:scale-110 transition-transform duration-300'} />
-                            {isSaving ? 'Saving…' : 'Save Design'}
+                            <span className="hidden sm:inline">{isSaving ? 'Saving…' : 'Save Design'}</span>
+                            <span className="sm:hidden">{isSaving ? '' : 'Save'}</span>
+                        </button>
+                        
+                        {/* Mobile Sidebar Toggle */}
+                        <button
+                            onClick={() => setIsMobileSidebarOpen(true)}
+                            className="lg:hidden p-2.5 rounded-lg bg-stone-light/30 text-charcoal hover:bg-stone-light/50 transition-colors"
+                        >
+                            <Menu size={20} />
                         </button>
                     </div>
                 </div>
@@ -1003,13 +1019,51 @@ export default function DesignerWorkspace() {
             {/* ── Main content ── */}
             <main className="flex-1 flex overflow-hidden">
 
+                {/* ── Mobile Sidebar Backdrop ── */}
+                <AnimatePresence>
+                    {isMobileSidebarOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                            className="fixed inset-0 bg-charcoal/40 backdrop-blur-sm z-[90] lg:hidden"
+                        />
+                    )}
+                </AnimatePresence>
+
                 {/* ── Sidebar ── */}
                 <motion.aside
-                    initial={{ x: -40, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-                    className="w-80 border-r border-stone-light bg-warm-white/80 backdrop-blur-sm flex flex-col h-full z-10 shadow-sm overflow-hidden"
+                    initial={false}
+                    animate={{ 
+                        x: isMobile 
+                            ? (isMobileSidebarOpen ? 0 : -320) 
+                            : 0 
+                    }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                    className={`fixed lg:static inset-y-0 left-0 w-80 flex-shrink-0 border-r border-stone-light bg-warm-white flex flex-col h-full z-[100] lg:z-10 shadow-2xl lg:shadow-sm overflow-hidden`}
                 >
+                    {/* ─ Mobile Close and Actions ─ */}
+                    <div className="lg:hidden flex items-center justify-between p-4 border-b border-stone-light bg-stone-light/10">
+                        <div className="flex gap-2">
+                            <button onClick={handleExportImage} className="p-2 rounded-lg bg-white border border-stone-light text-charcoal/60 hover:text-charcoal transition-colors">
+                                <Download size={16} />
+                            </button>
+                            <button onClick={handleShareOpen} className="p-2 rounded-lg bg-white border border-stone-light text-charcoal/60 hover:text-charcoal transition-colors">
+                                <Share2 size={16} />
+                            </button>
+                            <button onClick={handleCreateNew} className="p-2 rounded-lg bg-white border border-stone-light text-charcoal/60 hover:text-charcoal transition-colors">
+                                <FilePlus size={16} />
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                            className="p-2 rounded-lg text-charcoal/40 hover:text-charcoal hover:bg-stone-light/30 transition-all"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
                     {/* ─ Sidebar Tabs ─ */}
                     <div className="flex border-b border-stone-light/70 bg-stone-light/10">
                         {(['room', 'furniture'] as const).map((mode) => (
@@ -1363,7 +1417,7 @@ export default function DesignerWorkspace() {
 
                 {/* ── Canvas area ── */}
                 <section className="flex-1 relative bg-stone-light/15">
-                    {selectedId && (
+                    {selectedId && (!isMobile || isMobileSidebarOpen) && (
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10
                                         bg-charcoal/70 text-white text-[10px] tracking-[0.15em] uppercase
                                         px-4 py-2 rounded-full backdrop-blur-sm pointer-events-none text-center">
@@ -1375,14 +1429,44 @@ export default function DesignerWorkspace() {
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
-                        className="absolute top-4 left-4 z-10 bg-warm-white/80 backdrop-blur-sm border border-stone-light/50 rounded-lg px-4 py-2
+                        className="absolute top-4 left-4 z-10 bg-warm-white/80 backdrop-blur-sm border border-stone-light/50 rounded-lg px-3 sm:px-4 py-2
                                    flex items-center gap-2.5 shadow-sm pointer-events-none"
                     >
                         <Armchair size={14} strokeWidth={1.5} className="text-charcoal/40" />
-                        <span className="text-[10px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">
-                            {placedItems.length} {placedItems.length === 1 ? 'item' : 'items'} · {activeRoom.name}
+                        <span className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase text-charcoal/50 font-medium">
+                            {placedItems.length} {placedItems.length === 1 ? 'item' : 'items'} <span className="hidden xs:inline">· {activeRoom.name}</span>
                         </span>
                     </motion.div>
+
+                    {/* Mobile Floating Selected Item Controls */}
+                    <AnimatePresence>
+                        {isMobile && !isMobileSidebarOpen && selectedItem && (
+                            <motion.div
+                                initial={{ y: 100, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                exit={{ y: 100, opacity: 0 }}
+                                className="absolute bottom-20 left-4 right-4 z-30 bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-stone-light/50 lg:hidden"
+                            >
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] uppercase tracking-widest text-charcoal/40 font-bold">Selected</span>
+                                        <span className="text-sm font-serif text-charcoal">{selectedItem.name}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={duplicateItem} className="p-2.5 rounded-xl bg-stone-light/20 text-charcoal hover:bg-stone-light/40 transition-colors">
+                                            <Copy size={16} />
+                                        </button>
+                                        <button onClick={deleteSelected} className="p-2.5 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+                                            <Trash2 size={16} />
+                                        </button>
+                                        <button onClick={() => { setIsMobileSidebarOpen(true); setSidebarMode('furniture'); }} className="p-2.5 rounded-xl bg-charcoal text-white">
+                                            <Settings size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     <Canvas
                         shadows                                     // enables shadow maps
