@@ -26,6 +26,7 @@ import ContactPage from './pages/ContactPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
 import MyDesigns from './pages/MyDesigns'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 
 function HomePage() {
   return (
@@ -48,6 +49,7 @@ function App() {
   return (
     <div className="min-h-screen">
       <Analytics />
+      <SpeedInsights />
       <Routes>
         {/* Public: accessible without login */}
         <Route path="/" element={<HomePage />} />
