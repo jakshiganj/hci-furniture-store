@@ -36,6 +36,10 @@ import SofaModel from '../components/models/SofaModel';
 import BedModel from '../components/models/BedModel';
 import ShelfModel from '../components/models/ShelfModel';
 import VaseModel from '../components/models/VaseModel';
+import DeskModel from '../components/models/DeskModel';
+import WardrobeModel from '../components/models/WardrobeModel';
+import FloorLampModel from '../components/models/FloorLampModel';
+import TVStandModel from '../components/models/TVStandModel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,8 +67,8 @@ const CATALOG = [
     { type: 'vase', name: 'Vase', color: '#D8BFD8', size: [0.35, 0.55, 0.35] as [number, number, number] },
     { type: 'desk', name: 'Desk', color: '#8B6914', size: [1.5, 0.75, 0.75] as [number, number, number] },
     { type: 'wardrobe', name: 'Wardrobe', color: '#7B5E3A', size: [1.3, 2.1, 0.6] as [number, number, number] },
-    { type: 'lamp', name: 'Floor Lamp', color: '#D4AF37', size: [0.35, 1.7, 0.35] as [number, number, number] },
-    { type: 'tv', name: 'TV Stand', color: '#3A3A3A', size: [1.6, 0.55, 0.45] as [number, number, number] },
+    { type: 'floorlamp', name: 'Floor Lamp', color: '#D4AF37', size: [0.35, 1.7, 0.35] as [number, number, number] },
+    { type: 'tvstand', name: 'TV Stand', color: '#3A3A3A', size: [1.6, 0.55, 0.45] as [number, number, number] },
 ];
 
 function getSizeForType(type: string): [number, number, number] {
@@ -81,6 +85,10 @@ const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, nu
     bed: BedModel,
     shelf: ShelfModel,
     vase: VaseModel,
+    desk: DeskModel,
+    wardrobe: WardrobeModel,
+    floorlamp: FloorLampModel,
+    tvstand: TVStandModel,
 };
 
 // ─── 3D Model component ───────────────────────────────────────────────────────
