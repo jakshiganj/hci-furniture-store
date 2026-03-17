@@ -154,7 +154,7 @@ function clampToRoom(
     };
 }
 
-const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, number]; castShadow?: boolean; receiveShadow?: boolean }>> = {
+const MODEL_MAP: Record<string, React.ComponentType<{ scale: [number, number, number]; castShadow?: boolean; receiveShadow?: boolean; color?: string }>> = {
     chair: ChairModel,
     table: TableModel,
     sofa: SofaModel,
@@ -388,7 +388,7 @@ function Model({
                             } : undefined}
                             onClick={(e) => { e.stopPropagation(); onSelect(); }}
                         >
-                            <GlbModel scale={finalGlbScale} castShadow receiveShadow />
+                            <GlbModel scale={finalGlbScale} castShadow receiveShadow color={color} />
                         </group>
                     </Suspense>
                 ) : (

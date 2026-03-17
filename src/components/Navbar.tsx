@@ -5,11 +5,18 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { isLoggedIn, logout, getUser, isAdmin } from '../utils/auth';
 import { useCart } from '../utils/cart';
 
-const navLinks = [
+interface NavLink {
+  name: string;
+  href: string;
+  isRoute: boolean;
+  hash?: string;
+}
+
+const navLinks: NavLink[] = [
   { name: 'Shop', href: '/products', isRoute: true },
-  { name: 'Collections', href: '/#collections', isRoute: false, hash: 'collections' },
   { name: 'About', href: '/about', isRoute: true },
   { name: 'Journal', href: '/journal', isRoute: true },
+  { name: 'Contact', href: '/contact', isRoute: true },
 ];
 
 export default function Navbar() {
