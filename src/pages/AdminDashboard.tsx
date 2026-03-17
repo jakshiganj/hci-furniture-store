@@ -409,14 +409,27 @@ function DesignsTab({ showToastMessage }: { showToastMessage: (msg: string, type
     const [designs, setDesigns] = useState<SavedDesign[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const itemsPerPage = 9;
 
     const fetchDesigns = useCallback(async () => {
-        const { data, error } = await supabase.from('saved_designs').select('*').order('created_at', { ascending: false });
-        if (!error && data) setDesigns(data as SavedDesign[]);
+        setLoading(true);
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+
+        const { data, error, count } = await supabase
+            .from('saved_designs')
+            .select('id, name, created_at, room_type, furniture_layout', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (!error && data) {
+            setDesigns(data as SavedDesign[]);
+            if (count !== null) setTotalCount(count);
+        }
         setLoading(false);
-    }, []);
+    }, [currentPage]);
 
     useEffect(() => {
         Promise.resolve().then(() => fetchDesigns());
@@ -444,11 +457,8 @@ function DesignsTab({ showToastMessage }: { showToastMessage: (msg: string, type
 
     const designToDelete = designs.find(d => d.id === confirmDeleteId);
 
-    const totalPages = Math.ceil(designs.length / itemsPerPage);
-    const paginatedDesigns = designs.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    const paginatedDesigns = designs;
 
     return (
         <div>

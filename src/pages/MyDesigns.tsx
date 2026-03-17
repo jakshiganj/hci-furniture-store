@@ -20,14 +20,100 @@ import Footer from '../components/Footer';
 import { supabase } from '../utils/supabase';
 import { getUser } from '../utils/auth';
 import { mapFromSupabase, type Design } from '../services/designService';
+import Pagination from '../components/Pagination';
+
+function LazyDesignImage({ designId, alt, onImageClick, onDownloadClick, onDeleteClick }: { 
+    designId: string; 
+    alt: string;
+    onImageClick: (url: string) => void;
+    onDownloadClick: (url: string, name: string) => void;
+    onDeleteClick: (e: React.MouseEvent, id: string) => void;
+}) {
+    const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchImage = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('saved_designs')
+                    .select('image_url')
+                    .eq('id', designId)
+                    .single();
+                
+                if (isMounted && !error && data?.image_url) {
+                    setImageUrl(data.image_url);
+                }
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        };
+        fetchImage();
+        return () => { isMounted = false; };
+    }, [designId]);
+
+    if (isLoading) {
+        return (
+            <div className="w-full h-full flex items-center justify-center bg-stone-light/10">
+                <Loader2 size={32} className="animate-spin text-sage/40" />
+            </div>
+        );
+    }
+
+    if (!imageUrl) {
+        return (
+            <div className="w-full h-full flex items-center justify-center text-charcoal/10 bg-stone-light/10">
+                <Package size={64} strokeWidth={1} />
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <img 
+                src={imageUrl} 
+                alt={alt} 
+                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+            />
+            {/* Overlay Actions */}
+            <div className="absolute inset-0 bg-charcoal/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-[2px] flex items-center justify-center gap-4">
+                <button 
+                    onClick={() => onImageClick(imageUrl)}
+                    className="p-4 bg-white/90 hover:bg-white text-charcoal rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75"
+                    title="View Fullscreen"
+                >
+                    <Maximize2 size={20} />
+                </button>
+                <button 
+                    onClick={() => onDownloadClick(imageUrl, alt)}
+                    className="p-4 bg-sage text-white rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-150"
+                    title="Download Design"
+                >
+                    <Download size={20} />
+                </button>
+                <button 
+                    onClick={(e) => onDeleteClick(e, designId)}
+                    className="p-4 bg-red-500 text-white rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-[225ms]"
+                    title="Remove Design"
+                >
+                    <Trash2 size={20} />
+                </button>
+            </div>
+        </>
+    );
+}
 
 export default function MyDesigns() {
     const [designs, setDesigns] = useState<Design[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const itemsPerPage = 6;
     const user = getUser();
 
     const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
@@ -41,12 +127,17 @@ export default function MyDesigns() {
         const fetchSharedDesigns = async () => {
             setIsLoading(true);
             try {
-                // Fetch designs shared with the current user
-                const { data, error } = await supabase
+                const from = (currentPage - 1) * itemsPerPage;
+                const to = from + itemsPerPage - 1;
+
+                const query = supabase
                     .from('design_shares')
-                    .select('design_id, saved_designs(*)')
-                    .eq('shared_with_user_id', user.id)
-                    .order('created_at', { ascending: false });
+                    .select('design_id, saved_designs(id, name, room_type, created_at)', { count: 'exact' })
+                    .eq('shared_with_user_id', user.id);
+
+                const { data, error, count } = await query
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
 
                 if (error) throw error;
 
@@ -58,6 +149,7 @@ export default function MyDesigns() {
                             return mapFromSupabase(designData as unknown as Parameters<typeof mapFromSupabase>[0]);
                         });
                     setDesigns(mappedDesigns);
+                    if (count !== null) setTotalCount(count);
                 }
             } catch (err) {
                 console.error("Error fetching shared designs:", err);
@@ -67,7 +159,7 @@ export default function MyDesigns() {
         };
 
         fetchSharedDesigns();
-    }, [user?.id]);
+    }, [user?.id, currentPage]);
 
     const handleDownload = (imageUrl: string, fileName: string) => {
         const link = document.createElement('a');
@@ -99,10 +191,14 @@ export default function MyDesigns() {
         showToastMessage('Design removed from your collection');
     };
 
-    const filteredDesigns = designs.filter(d => 
-        d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.roomType.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredDesigns = designs; // Now handled by server, but keeping variable name for compatibility
+    
+    // We update current page when search query changes to reset pagination
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
 
     const designToDelete = designs.find(d => d.id === confirmDeleteId);
 
@@ -224,88 +320,68 @@ export default function MyDesigns() {
                             <p className="text-[10px] uppercase tracking-[0.3em] text-charcoal/30 font-bold">Assembling your collection</p>
                         </div>
                     ) : filteredDesigns.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
-                            {filteredDesigns.map((design, i) => (
-                                <motion.div
-                                    key={design.id}
-                                    initial={{ opacity: 0, y: 30 }}
-                                    whileInView={{ opacity: 1, y: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: (i % 3) * 0.1 }}
-                                    className="group relative"
-                                >
-                                    {/* Image Card */}
-                                    <div className="relative aspect-[16/11] rounded-[2.5rem] overflow-hidden bg-stone-light/20 shadow-sm transition-all duration-700 group-hover:shadow-2xl group-hover:-translate-y-2 border border-white/50">
-                                        {design.imageUrl ? (
-                                            <>
-                                                <img 
-                                                    src={design.imageUrl} 
-                                                    alt={design.name} 
-                                                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
-                                                />
-                                                {/* Overlay Actions */}
-                                                <div className="absolute inset-0 bg-charcoal/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-[2px] flex items-center justify-center gap-4">
-                                                    <button 
-                                                        onClick={() => setSelectedImage(design.imageUrl!)}
-                                                        className="p-4 bg-white/90 hover:bg-white text-charcoal rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75"
-                                                        title="View Fullscreen"
-                                                    >
-                                                        <Maximize2 size={20} />
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleDownload(design.imageUrl!, design.name)}
-                                                        className="p-4 bg-sage text-white rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-150"
-                                                        title="Download Design"
-                                                    >
-                                                        <Download size={20} />
-                                                    </button>
-                                                    <button 
-                                                        onClick={(e) => handleDelete(e, design.id)}
-                                                        className="p-4 bg-red-500 text-white rounded-full shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-[225ms]"
-                                                        title="Remove Design"
-                                                    >
-                                                        <Trash2 size={20} />
-                                                    </button>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-charcoal/10 bg-stone-light/10">
-                                                <Package size={64} strokeWidth={1} />
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+                                {filteredDesigns.map((design, i) => (
+                                    <motion.div
+                                        key={design.id}
+                                        initial={{ opacity: 0, y: 30 }}
+                                        whileInView={{ opacity: 1, y: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: (i % 3) * 0.1 }}
+                                        className="group relative"
+                                    >
+                                        {/* Image Card */}
+                                        <div className="relative aspect-[16/11] rounded-[2.5rem] overflow-hidden bg-stone-light/20 shadow-sm transition-all duration-700 group-hover:shadow-2xl group-hover:-translate-y-2 border border-white/50">
+                                            <LazyDesignImage 
+                                                designId={design.id}
+                                                alt={design.name}
+                                                onImageClick={setSelectedImage}
+                                                onDownloadClick={handleDownload}
+                                                onDeleteClick={handleDelete}
+                                            />
+                                            
+                                            {/* Room Type Tag */}
+                                            <div className="absolute top-6 left-6 px-4 py-1.5 bg-white/90 backdrop-blur-md rounded-full text-[9px] font-bold uppercase tracking-widest text-charcoal shadow-sm border border-charcoal/5">
+                                                {design.roomType}
                                             </div>
-                                        )}
+                                        </div>
                                         
-                                        {/* Room Type Tag */}
-                                        <div className="absolute top-6 left-6 px-4 py-1.5 bg-white/90 backdrop-blur-md rounded-full text-[9px] font-bold uppercase tracking-widest text-charcoal shadow-sm border border-charcoal/5">
-                                            {design.roomType}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Content */}
-                                    <div className="mt-8 px-4">
-                                        <div className="flex items-center gap-4 text-charcoal/30 mb-2">
-                                            <div className="flex items-center gap-1.5 grayscale opacity-50">
-                                                <Calendar size={12} />
-                                                <span className="text-[10px] font-semibold tracking-wider uppercase">{design.createdAt}</span>
+                                        {/* Content */}
+                                        <div className="mt-8 px-4">
+                                            <div className="flex items-center gap-4 text-charcoal/30 mb-2">
+                                                <div className="flex items-center gap-1.5 grayscale opacity-50">
+                                                    <Calendar size={12} />
+                                                    <span className="text-[10px] font-semibold tracking-wider uppercase">{design.createdAt}</span>
+                                                </div>
+                                                <span className="w-1 h-1 bg-charcoal/10 rounded-full"></span>
+                                                <span className="text-[10px] font-semibold tracking-wider uppercase">High res</span>
                                             </div>
-                                            <span className="w-1 h-1 bg-charcoal/10 rounded-full"></span>
-                                            <span className="text-[10px] font-semibold tracking-wider uppercase">High res</span>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <h3 className="text-2xl font-serif text-charcoal group-hover:text-sage transition-colors duration-300">
+                                                    {design.name}
+                                                </h3>
+                                                <button
+                                                    onClick={(e) => handleDelete(e, design.id)}
+                                                    className="flex-shrink-0 mt-1.5 p-1.5 rounded-lg text-charcoal/25 hover:text-red-500 hover:bg-red-50 transition-all duration-300"
+                                                    title="Remove Design"
+                                                >
+                                                    <Trash2 size={15} strokeWidth={1.5} />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h3 className="text-2xl font-serif text-charcoal group-hover:text-sage transition-colors duration-300">
-                                                {design.name}
-                                            </h3>
-                                            <button
-                                                onClick={(e) => handleDelete(e, design.id)}
-                                                className="flex-shrink-0 mt-1.5 p-1.5 rounded-lg text-charcoal/25 hover:text-red-500 hover:bg-red-50 transition-all duration-300"
-                                                title="Remove Design"
-                                            >
-                                                <Trash2 size={15} strokeWidth={1.5} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                            
+                            <div className="mt-16">
+                                <Pagination 
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={setCurrentPage}
+                                />
+                            </div>
+                        </>
                     ) : (
                         <motion.div 
                             initial={{ opacity: 0 }}
